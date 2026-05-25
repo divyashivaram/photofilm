@@ -1,0 +1,24 @@
+[project]
+name = "photofilm"
+version = "0.1.0"
+description = "Apply Fujifilm-inspired film simulations to photos from the terminal."
+requires-python = ">=3.10"
+dependencies = [
+    "Pillow>=10.0",
+    "numpy>=1.26",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+heic = ["pillow-heif>=0.16"]
+raw = ["rawpy>=0.21"]
+
+[project.scripts]
+photofilm = "photofilm.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["photofilm*"]
