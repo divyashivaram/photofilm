@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Film Preset Viewer</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e6e8ee;
+    --muted: #8a93a6;
+    --accent: #f0a657;
+    --accent-2: #e07b39;
+    --good: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(15, 17, 21, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .controls {
+    display: flex; gap: 10px; align-items: center;
+    margin-left: auto;
+  }
+  .btn {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--border);
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #1a1208;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-2);
+    border-color: var(--accent-2);
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  input[type="file"] { display: none; }
+  .file-label {
+    display: inline-block;
+  }
+  .empty {
+    text-align: center;
+    padding: 120px 24px;
+    color: var(--muted);
+  }
+  .empty h2 { font-weight: 500; margin: 0 0 8px 0; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    padding: 24px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: transform 0.15s, border-color 0.15s;
+    cursor: pointer;
+  }
+  .card:hover { transform: translateY(-2px); border-color: #3a4150; }
+  .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .preview {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    display: block;
+    object-fit: contain;
+  }
+  .card-body {
+    padding: 10px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .name { font-size: 13px; font-weight: 500; }
+  .check {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    border: 1.5px solid var(--border);
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--panel-2);
+  }
+  .card.selected .check {
+    background: var(--accent); border-color: var(--accent);
+  }
+  .card.selected .check::after {
+    content: ""; width: 5px; height: 9px;
+    border: solid #1a1208;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+  .loading {
+    position: relative;
+  }
+  .loading::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  #status {
+    color: var(--muted);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Film Preset Viewer</h1>
+    <span id="status"></span>
+    <div class="controls">
+      <label class="file-label btn">
+        Choose photo
+        <input type="file" id="file" accept="image/*">
+      </label>
+      <button id="selectAll" class="btn" disabled>Select all</button>
+      <button id="download" class="btn btn-primary" disabled>Download (0)</button>
+    </div>
+  </header>
+  <div id="empty" class="empty">
+    <h2>Pick a photo to begin</h2>
+    <p>Eight Fujifilm-inspired presets will be previewed instantly.</p>
+  </div>
+  <main id="grid" class="grid" style="display:none"></main>
+
+<script>
+"use strict";
+
+// ---------- Preset definitions (ported from photofilm/presets.py) ----------
+const FILM_CURVE = [[0.0, 0.04], [0.25, 0.22], [0.5, 0.5], [0.75, 0.78], [1.0, 0.96]];
+
+const PRESETS = {
+  "classic-chrome": [
+    ["tone_curve", { points: FILM_CURVE }],
+    ["white_balance", { temp: 0.15, tint: -0.05 }],
+    ["saturation", { amount: -0.25 }],
+    ["channel_saturation", { reds: -0.15, greens: 0.05, blues: 0.10 }],
+    ["contrast", { amount: 0.10 }],
+    ["grain", { amount: 0.4 }],
+  ],
+  "velvia": [
+    ["tone_curve", { points: FILM_CURVE }],
+    ["contrast", { amount: 0.25 }],
+    ["saturation", { amount: 0.35 }],
+    ["channel_saturation", { reds: 0.25, greens: 0.30, blues: 0.15 }],
+    ["grain", { amount: 0.2 }],
+  ],
+  "provia": [
+    ["tone_curve", { points: FILM_CURVE }],
+    ["saturation", { amount: 0.10 }],
+    ["contrast", { amount: 0.08 }],
+    ["grain", { amount: 0.25 }],
+  ],
+  "astia": [
+    ["tone_curve", { points: [[0.0, 0.06], [0.3, 0.30], [0.7, 0.74], [1.0, 0.95]] }],
+    ["white_balance", { temp: 0.20, tint: 0.05 }],
+    ["saturation", { amount: 0.05 }],
+    ["channel_saturation", { reds: 0.15, greens: -0.10, blues: -0.05 }],
+    ["grain", { amount: 0.2 }],
+  ],
+  "acros": [
+    ["monochrome", { red: 0.4, green: 0.4, blue: 0.2 }],
+    ["tone_curve", { points: [[0.0, 0.02], [0.3, 0.22], [0.7, 0.80], [1.0, 0.98]] }],
+    ["contrast", { amount: 0.15 }],
+    ["grain", { amount: 0.6 }],
+  ],
+  "synthwave": [
+    ["contrast", { amount: 0.20 }],
+    ["tone_curve", { points: [[0.0, 0.08], [0.3, 0.32], [0.7, 0.78], [1.0, 1.0]], channel: "r" }],
+    ["tone_curve", { points: [[0.0, 0.0], [0.3, 0.16], [0.7, 0.48], [1.0, 0.82]], channel: "g" }],
+    ["tone_curve", { points: [[0.0, 0.28], [0.3, 0.50], [0.7, 0.78], [1.0, 0.95]], channel: "b" }],
+    ["saturation", { amount: 0.40 }],
+    ["bloom", { threshold: 0.55, blur_radius: 30.0, amount: 0.55 }],
+    ["grain", { amount: 0.25 }],
+  ],
+  "japan-night": [
+    ["tone_curve", { points: [[0.0, 0.03], [0.25, 0.20], [0.5, 0.48], [0.75, 0.78], [1.0, 0.97]] }],
+    ["tone_curve", { points: [[0.0, 0.02], [0.3, 0.28], [0.7, 0.82], [1.0, 1.0]], channel: "r" }],
+    ["tone_curve", { points: [[0.0, 0.04], [0.3, 0.24], [0.7, 0.70], [1.0, 0.92]], channel: "g" }],
+    ["tone_curve", { points: [[0.0, 0.10], [0.3, 0.32], [0.7, 0.58], [1.0, 0.80]], channel: "b" }],
+    ["saturation", { amount: -0.10 }],
+    ["channel_saturation", { reds: 0.25, greens: -0.10, blues: 0.15 }],
+    ["contrast", { amount: 0.12 }],
+    ["bloom", { threshold: 0.60, blur_radius: 22.0, amount: 0.35 }],
+    ["grain", { amount: 0.35 }],
+  ],
+  "eterna": [
+    ["tone_curve", { points: [[0.0, 0.08], [0.5, 0.48], [1.0, 0.88]] }],
+    ["saturation", { amount: -0.30 }],
+    ["white_balance", { temp: 0.05, tint: -0.05 }],
+    ["contrast", { amount: -0.10 }],
+    ["grain", { amount: 0.3 }],
+  ],
+};
+
+// ---------- Filter operations on a Float32Array of length width*height*3 ----------
+const CH = { r: 0, g: 1, b: 2 };
+
+function buildLut(points) {
+  const lut = new Float32Array(1024);
+  let seg = 0;
+  for (let i = 0; i < 1024; i++) {
+    const x = i / 1023;
+    while (seg < points.length - 2 && x > points[seg + 1][0]) seg++;
+    const [x0, y0] = points[seg];
+    const [x1, y1] = points[seg + 1];
+    const t = x1 === x0 ? 0 : (x - x0) / (x1 - x0);
+    lut[i] = y0 + (y1 - y0) * t;
+  }
+  return lut;
+}
+
+function opToneCurve(buf, n, { points, channel = "rgb" }) {
+  const lut = buildLut(points);
+  if (channel === "rgb") {
+    for (let i = 0; i < buf.length; i++) {
+      const v = buf[i] < 0 ? 0 : buf[i] > 1 ? 1 : buf[i];
+      buf[i] = lut[(v * 1023) | 0];
+    }
+  } else {
+    const c = CH[channel];
+    for (let i = 0; i < n; i++) {
+      const idx = i * 3 + c;
+      const v = buf[idx] < 0 ? 0 : buf[idx] > 1 ? 1 : buf[idx];
+      buf[idx] = lut[(v * 1023) | 0];
+    }
+  }
+}
+
+function opWhiteBalance(buf, n, { temp = 0, tint = 0 }) {
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    buf[idx]     += temp * 0.08;
+    buf[idx + 2] -= temp * 0.08;
+    buf[idx + 1] -= tint * 0.06;
+  }
+}
+
+function opSaturation(buf, n, { amount = 0 }) {
+  const k = 1.0 + amount;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const luma = 0.2126 * buf[idx] + 0.7152 * buf[idx + 1] + 0.0722 * buf[idx + 2];
+    buf[idx]     = luma + (buf[idx]     - luma) * k;
+    buf[idx + 1] = luma + (buf[idx + 1] - luma) * k;
+    buf[idx + 2] = luma + (buf[idx + 2] - luma) * k;
+  }
+}
+
+function opChannelSaturation(buf, n, { reds = 0, greens = 0, blues = 0 }) {
+  const kr = 1.0 + reds, kg = 1.0 + greens, kb = 1.0 + blues;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const luma = 0.2126 * buf[idx] + 0.7152 * buf[idx + 1] + 0.0722 * buf[idx + 2];
+    buf[idx]     = luma + (buf[idx]     - luma) * kr;
+    buf[idx + 1] = luma + (buf[idx + 1] - luma) * kg;
+    buf[idx + 2] = luma + (buf[idx + 2] - luma) * kb;
+  }
+}
+
+function opContrast(buf, n, { amount = 0 }) {
+  const k = 1.0 + amount;
+  for (let i = 0; i < buf.length; i++) {
+    buf[i] = 0.5 + (buf[i] - 0.5) * k;
+  }
+}
+
+// Box-Muller for Gaussian noise, seeded with mulberry32
+function mulberry32(seed) {
+  return function() {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gaussian(rng) {
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+function opGrain(buf, n, { amount = 0, seed = 0 }) {
+  if (amount <= 0) return;
+  const rng = mulberry32(seed || 1);
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const luma = 0.2126 * buf[idx] + 0.7152 * buf[idx + 1] + 0.0722 * buf[idx + 2];
+    const weight = 1.0 - Math.abs(luma - 0.5) * 2.0;
+    const noise = gaussian(rng) * amount * 0.05 * weight;
+    buf[idx]     += noise;
+    buf[idx + 1] += noise;
+    buf[idx + 2] += noise;
+  }
+}
+
+function opMonochrome(buf, n, { red = 0.3, green = 0.5, blue = 0.2 }) {
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const v = red * buf[idx] + green * buf[idx + 1] + blue * buf[idx + 2];
+    buf[idx] = v; buf[idx + 1] = v; buf[idx + 2] = v;
+  }
+}
+
+// Bloom: threshold bright pixels, blur via canvas, screen-blend back.
+function opBloom(buf, n, width, height, { threshold = 0.6, blur_radius = 20.0, amount = 0.5 }) {
+  if (amount <= 0) return;
+  const denom = Math.max(1e-3, 1.0 - threshold);
+  const brightImg = new ImageData(width, height);
+  const bd = brightImg.data;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const luma = 0.2126 * buf[idx] + 0.7152 * buf[idx + 1] + 0.0722 * buf[idx + 2];
+    let mask = (luma - threshold) / denom;
+    if (mask < 0) mask = 0; else if (mask > 1) mask = 1;
+    const j = i * 4;
+    bd[j]     = Math.min(255, Math.max(0, buf[idx]     * mask * 255));
+    bd[j + 1] = Math.min(255, Math.max(0, buf[idx + 1] * mask * 255));
+    bd[j + 2] = Math.min(255, Math.max(0, buf[idx + 2] * mask * 255));
+    bd[j + 3] = 255;
+  }
+  const src = document.createElement("canvas");
+  src.width = width; src.height = height;
+  src.getContext("2d").putImageData(brightImg, 0, 0);
+  const dst = document.createElement("canvas");
+  dst.width = width; dst.height = height;
+  const dctx = dst.getContext("2d");
+  dctx.filter = `blur(${blur_radius}px)`;
+  dctx.drawImage(src, 0, 0);
+  const blurred = dctx.getImageData(0, 0, width, height).data;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3, j = i * 4;
+    const br = (blurred[j]     / 255) * amount;
+    const bg = (blurred[j + 1] / 255) * amount;
+    const bb = (blurred[j + 2] / 255) * amount;
+    buf[idx]     = 1.0 - (1.0 - buf[idx])     * (1.0 - br);
+    buf[idx + 1] = 1.0 - (1.0 - buf[idx + 1]) * (1.0 - bg);
+    buf[idx + 2] = 1.0 - (1.0 - buf[idx + 2]) * (1.0 - bb);
+  }
+}
+
+// ---------- Pipeline ----------
+function imageDataToFloat(imageData) {
+  const src = imageData.data;
+  const n = src.length / 4;
+  const buf = new Float32Array(n * 3);
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    buf[i * 3]     = src[j]     / 255;
+    buf[i * 3 + 1] = src[j + 1] / 255;
+    buf[i * 3 + 2] = src[j + 2] / 255;
+  }
+  return buf;
+}
+
+function floatToImageData(buf, imageData) {
+  const dst = imageData.data;
+  const n = buf.length / 3;
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    let r = buf[i * 3], g = buf[i * 3 + 1], b = buf[i * 3 + 2];
+    if (r < 0) r = 0; else if (r > 1) r = 1;
+    if (g < 0) g = 0; else if (g > 1) g = 1;
+    if (b < 0) b = 0; else if (b > 1) b = 1;
+    dst[j]     = (r * 255) | 0;
+    dst[j + 1] = (g * 255) | 0;
+    dst[j + 2] = (b * 255) | 0;
+    dst[j + 3] = 255;
+  }
+}
+
+function applyPreset(srcImageData, presetName, width, height) {
+  const out = new ImageData(
+    new Uint8ClampedArray(srcImageData.data),
+    width, height
+  );
+  const buf = imageDataToFloat(out);
+  const n = width * height;
+  for (const [op, args] of PRESETS[presetName]) {
+    switch (op) {
+      case "tone_curve":         opToneCurve(buf, n, args); break;
+      case "white_balance":      opWhiteBalance(buf, n, args); break;
+      case "saturation":         opSaturation(buf, n, args); break;
+      case "channel_saturation": opChannelSaturation(buf, n, args); break;
+      case "contrast":           opContrast(buf, n, args); break;
+      case "grain":              opGrain(buf, n, { ...args, seed: 42 }); break;
+      case "monochrome":         opMonochrome(buf, n, args); break;
+      case "bloom":              opBloom(buf, n, width, height, args); break;
+    }
+  }
+  floatToImageData(buf, out);
+  return out;
+}
+
+// ---------- UI ----------
+const fileInput   = document.getElementById("file");
+const grid        = document.getElementById("grid");
+const empty       = document.getElementById("empty");
+const downloadBtn = document.getElementById("download");
+const selectAllBtn = document.getElementById("selectAll");
+const statusEl    = document.getElementById("status");
+
+const selected = new Set();
+let sourceImage = null;
+let sourceName  = "image";
+let previewImageData = null;  // downscaled
+let previewW = 0, previewH = 0;
+
+const PREVIEW_MAX = 500;
+
+function updateDownloadBtn() {
+  downloadBtn.disabled = selected.size === 0;
+  downloadBtn.textContent = `Download (${selected.size})`;
+}
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+fileInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  sourceName = file.name.replace(/\.[^.]+$/, "");
+  setStatus("Loading…");
+  const img = await loadImage(file);
+  sourceImage = img;
+
+  // Build downscaled preview source.
+  const scale = Math.min(1, PREVIEW_MAX / Math.max(img.width, img.height));
+  previewW = Math.max(1, Math.round(img.width * scale));
+  previewH = Math.max(1, Math.round(img.height * scale));
+  const c = document.createElement("canvas");
+  c.width = previewW; c.height = previewH;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(img, 0, 0, previewW, previewH);
+  previewImageData = ctx.getImageData(0, 0, previewW, previewH);
+
+  buildGrid();
+  empty.style.display = "none";
+  grid.style.display = "grid";
+  selectAllBtn.disabled = false;
+  setStatus(`${img.width}×${img.height}`);
+});
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+    img.src = url;
+  });
+}
+
+function buildGrid() {
+  grid.innerHTML = "";
+  selected.clear();
+  updateDownloadBtn();
+  const names = Object.keys(PRESETS);
+  for (const name of names) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.preset = name;
+    card.innerHTML = `
+      <canvas class="preview loading" width="${previewW}" height="${previewH}"></canvas>
+      <div class="card-body">
+        <span class="name">${name}</span>
+        <span class="check" aria-hidden="true"></span>
+      </div>
+    `;
+    card.addEventListener("click", () => {
+      if (selected.has(name)) selected.delete(name);
+      else selected.add(name);
+      card.classList.toggle("selected");
+      updateDownloadBtn();
+    });
+    grid.appendChild(card);
+  }
+  // Render previews progressively so the UI stays responsive.
+  (async () => {
+    for (const name of names) {
+      await new Promise(r => requestAnimationFrame(r));
+      const card = grid.querySelector(`[data-preset="${name}"]`);
+      const canvas = card.querySelector("canvas");
+      const ctx = canvas.getContext("2d");
+      const out = applyPreset(previewImageData, name, previewW, previewH);
+      ctx.putImageData(out, 0, 0);
+      canvas.classList.remove("loading");
+    }
+  })();
+}
+
+selectAllBtn.addEventListener("click", () => {
+  const cards = grid.querySelectorAll(".card");
+  const allSelected = selected.size === cards.length;
+  selected.clear();
+  cards.forEach(card => {
+    if (!allSelected) {
+      selected.add(card.dataset.preset);
+      card.classList.add("selected");
+    } else {
+      card.classList.remove("selected");
+    }
+  });
+  selectAllBtn.textContent = allSelected ? "Select all" : "Clear selection";
+  updateDownloadBtn();
+});
+
+downloadBtn.addEventListener("click", async () => {
+  if (!sourceImage || selected.size === 0) return;
+  downloadBtn.disabled = true;
+  const total = selected.size;
+  let done = 0;
+  // Render at full resolution to a single source canvas once.
+  const src = document.createElement("canvas");
+  src.width = sourceImage.width; src.height = sourceImage.height;
+  src.getContext("2d").drawImage(sourceImage, 0, 0);
+  const srcData = src.getContext("2d").getImageData(0, 0, src.width, src.height);
+
+  for (const name of selected) {
+    done++;
+    setStatus(`Rendering ${name} (${done}/${total})…`);
+    await new Promise(r => setTimeout(r, 0));
+    const out = applyPreset(srcData, name, src.width, src.height);
+    const c = document.createElement("canvas");
+    c.width = src.width; c.height = src.height;
+    c.getContext("2d").putImageData(out, 0, 0);
+    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.95));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${sourceName}_${name}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  setStatus(`Saved ${total}`);
+  downloadBtn.disabled = false;
+  updateDownloadBtn();
+});
+</script>
+</body>
+</html>

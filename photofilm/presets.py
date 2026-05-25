@@ -61,6 +61,20 @@ PRESETS: dict[str, list[tuple[str, dict]]] = {
         ("bloom", {"threshold": 0.55, "blur_radius": 30.0, "amount": 0.55}),
         ("grain", {"amount": 0.25}),
     ],
+    # Tokyo back-alley at night: warm orange/red glowing signage against
+    # cool teal shadows, soft halation on the lights, wet-asphalt mood.
+    # Needs a source with practical lights — this grades them, doesn't invent them.
+    "japan-night": [
+        ("tone_curve", {"points": [(0.0, 0.03), (0.25, 0.20), (0.5, 0.48), (0.75, 0.78), (1.0, 0.97)]}),
+        ("tone_curve", {"points": [(0.0, 0.02), (0.3, 0.28), (0.7, 0.82), (1.0, 1.0)],  "channel": "r"}),
+        ("tone_curve", {"points": [(0.0, 0.04), (0.3, 0.24), (0.7, 0.70), (1.0, 0.92)], "channel": "g"}),
+        ("tone_curve", {"points": [(0.0, 0.10), (0.3, 0.32), (0.7, 0.58), (1.0, 0.80)], "channel": "b"}),
+        ("saturation", {"amount": -0.10}),
+        ("channel_saturation", {"reds": 0.25, "greens": -0.10, "blues": 0.15}),
+        ("contrast", {"amount": 0.12}),
+        ("bloom", {"threshold": 0.60, "blur_radius": 22.0, "amount": 0.35}),
+        ("grain", {"amount": 0.35}),
+    ],
     # Faded, low-contrast nostalgic look.
     "eterna": [
         ("tone_curve", {"points": [(0.0, 0.08), (0.5, 0.48), (1.0, 0.88)]}),
