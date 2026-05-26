@@ -2,232 +2,1049 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Film Preset Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>photofilm</title>
 <style>
   :root {
-    --bg: #0f1115;
-    --panel: #181b22;
-    --panel-2: #1f232c;
-    --border: #2a2f3a;
-    --text: #e6e8ee;
-    --muted: #8a93a6;
-    --accent: #f0a657;
-    --accent-2: #e07b39;
-    --good: #4ade80;
+    --bg: #0b0b0f;
+    --surface: #131319;
+    --surface-2: #1c1c23;
+    --hairline: rgba(255, 240, 220, 0.08);
+    --hairline-strong: rgba(255, 240, 220, 0.14);
+    --ink: #ece7dd;
+    --ink-dim: #b6afa2;
+    --muted: #6f6a60;
+    --accent: #c89b6e;
+    --accent-deep: #a07747;
+    --danger: #d97757;
+    --good: #7fb069;
+    --shadow-1: 0 1px 0 rgba(255,240,220,0.04), 0 6px 24px rgba(0,0,0,0.4);
   }
+
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0;
     background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
+
+  /* subtle film-grain background */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    mix-blend-mode: overlay;
+  }
+
+  .serif {
+    font-family: "Charter", "Iowan Old Style", "Palatino Linotype", "Palatino", "Georgia", serif;
+    font-weight: 400;
+    letter-spacing: -0.005em;
+  }
+  .mono {
+    font-family: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", monospace;
+    font-feature-settings: "ss01", "ss02";
+  }
+
+  /* ---------- header ---------- */
   header {
-    position: sticky; top: 0; z-index: 10;
-    background: rgba(15, 17, 21, 0.95);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
-    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(11, 11, 15, 0.85);
+    backdrop-filter: saturate(140%) blur(16px);
+    border-bottom: 1px solid var(--hairline);
+    padding: 14px 28px;
+    display: flex; align-items: center; gap: 20px;
+    min-height: 56px;
   }
-  h1 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
+  .brand {
+    display: flex; align-items: baseline; gap: 10px;
   }
-  .controls {
-    display: flex; gap: 10px; align-items: center;
+  .brand-mark {
+    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
+    font-style: italic;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .brand-mark::first-letter { color: var(--accent); }
+  .brand-sub {
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .head-meta {
+    margin-left: 8px;
+    color: var(--ink-dim);
+    font-size: 12.5px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .head-meta .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+  .head-actions {
     margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
   }
+
+  /* ---------- buttons ---------- */
   .btn {
-    background: var(--panel-2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    appearance: none;
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
     padding: 8px 14px;
+    font: inherit;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    font-size: 13px;
-    font-family: inherit;
-    transition: all 0.15s;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.05s ease;
+    display: inline-flex; align-items: center; gap: 8px;
+    white-space: nowrap;
   }
-  .btn:hover:not(:disabled) {
-    background: var(--border);
-  }
+  .btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--ink-dim); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .btn-primary {
     background: var(--accent);
     color: #1a1208;
     border-color: var(--accent);
     font-weight: 600;
   }
-  .btn-primary:hover:not(:disabled) {
-    background: var(--accent-2);
-    border-color: var(--accent-2);
+  .btn-primary:hover:not(:disabled) { background: #d3a87b; border-color: #d3a87b; }
+  .btn-ghost { border-color: transparent; }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface-2); }
+  .btn .kbd {
+    font-size: 10px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(255,240,220,0.07);
+    color: var(--ink-dim);
+    border: 1px solid var(--hairline);
+    margin-left: 2px;
   }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   input[type="file"] { display: none; }
-  .file-label {
-    display: inline-block;
+
+  /* ---------- empty state (drop zone) ---------- */
+  #empty {
+    position: relative; z-index: 1;
+    min-height: calc(100vh - 56px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 60px 24px;
   }
-  .empty {
+  .drop-card {
+    width: 100%;
+    max-width: 560px;
     text-align: center;
-    padding: 120px 24px;
+    padding: 64px 48px;
+    border: 1px dashed var(--hairline-strong);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255,240,220,0.012), rgba(255,240,220,0));
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .drop-card.dragover { border-color: var(--accent); background: rgba(200, 155, 110, 0.05); }
+  .drop-eyebrow {
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
     color: var(--muted);
+    margin-bottom: 18px;
   }
-  .empty h2 { font-weight: 500; margin: 0 0 8px 0; }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-    padding: 24px;
+  .drop-card h1 {
+    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
+    font-weight: 400;
+    font-size: 34px;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin: 0 0 14px;
+    color: var(--ink);
   }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+  .drop-card h1 em { color: var(--accent); font-style: italic; }
+  .drop-card p {
+    color: var(--ink-dim);
+    margin: 0 0 28px;
+    font-size: 14.5px;
+  }
+  .drop-actions { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .drop-hint {
+    margin-top: 22px;
+    color: var(--muted);
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+  }
+
+  /* ---------- workspace ---------- */
+  #workspace { display: none; position: relative; z-index: 1; }
+  #workspace.active { display: block; }
+
+  .hero-wrap {
+    padding: 20px 28px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .hero {
+    position: relative;
+    width: var(--hero-w, min(1100px, calc(100vw - 56px)));
+    height: var(--hero-h, auto);
+    background: #000;
+    border-radius: 6px;
     overflow: hidden;
-    transition: transform 0.15s, border-color 0.15s;
+    box-shadow: var(--shadow-1);
+    user-select: none;
+    --split: 100%;
+    --intensity: 1;
+  }
+  .hero canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    image-rendering: -webkit-optimize-contrast;
+  }
+  .hero .canvas-original { z-index: 1; }
+  .hero .canvas-filtered {
+    z-index: 2;
+    opacity: var(--intensity);
+    clip-path: inset(0 calc(100% - var(--split)) 0 0);
+    transition: opacity 0.08s linear;
+  }
+  .hero .scrubber {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: var(--split);
+    transform: translateX(-50%);
+    width: 2px;
+    background: rgba(255,240,220,0.85);
+    z-index: 3;
+    pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
+  }
+  .hero .scrubber-handle {
+    position: absolute;
+    top: 50%;
+    left: var(--split);
+    transform: translate(-50%, -50%);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(20,20,25,0.85);
+    border: 1px solid rgba(255,240,220,0.55);
+    backdrop-filter: blur(6px);
+    z-index: 4;
+    cursor: ew-resize;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,240,220,0.85);
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+  .hero .scrubber-handle:hover, .hero .scrubber-handle.dragging {
+    background: rgba(30,30,38,0.95);
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  .hero .scrubber-handle::before,
+  .hero .scrubber-handle::after {
+    content: "";
+    width: 5px; height: 9px;
+    border: solid currentColor;
+  }
+  .hero .scrubber-handle::before { border-width: 0 0 0 2px; margin-right: 4px; }
+  .hero .scrubber-handle::after { border-width: 0 2px 0 0; margin-left: 4px; }
+  .hero .hero-tag {
+    position: absolute;
+    z-index: 5;
+    top: 14px;
+    padding: 5px 10px;
+    background: rgba(20,20,25,0.65);
+    border: 1px solid var(--hairline);
+    backdrop-filter: blur(6px);
+    border-radius: 999px;
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .hero .hero-tag.left  { left: 14px; }
+  .hero .hero-tag.right { right: 14px; }
+  .hero.is-loading::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s linear infinite;
+    z-index: 6;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* ---------- hero meta + controls ---------- */
+  .hero-meta {
+    width: var(--hero-w, min(1100px, calc(100vw - 56px)));
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 32px;
+    padding-top: 0;
+  }
+  .hero-meta .stock-name {
+    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
+    font-size: 24px;
+    letter-spacing: -0.015em;
+    margin: 0;
+    color: var(--ink);
+    font-weight: 400;
+    line-height: 1.1;
+  }
+  .hero-meta .stock-blurb {
+    margin: 4px 0 0;
+    color: var(--ink-dim);
+    font-size: 13.5px;
+    max-width: 56ch;
+  }
+  .hero-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .intensity {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--ink-dim);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .intensity input[type="range"] {
+    appearance: none;
+    width: 140px;
+    height: 2px;
+    background: var(--hairline-strong);
+    border-radius: 1px;
+    outline: none;
     cursor: pointer;
   }
-  .card:hover { transform: translateY(-2px); border-color: #3a4150; }
-  .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-  .preview {
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    background: #000;
-    display: block;
-    object-fit: contain;
+  .intensity input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    cursor: grab;
+    transition: transform 0.1s;
   }
-  .card-body {
-    padding: 10px 12px;
-    display: flex; align-items: center; justify-content: space-between;
+  .intensity input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.15); cursor: grabbing; }
+  .intensity-val {
+    font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+    font-size: 11.5px;
+    color: var(--ink);
+    min-width: 38px;
+    text-align: right;
+    letter-spacing: 0;
   }
-  .name { font-size: 13px; font-weight: 500; }
-  .check {
-    width: 18px; height: 18px;
+
+  .select-btn {
+    background: transparent;
+    border: 1px solid var(--hairline-strong);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 8px 16px 8px 12px;
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: all 0.15s ease;
+  }
+  .select-btn:hover { border-color: var(--ink-dim); }
+  .select-btn .star {
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--ink-dim);
     border-radius: 4px;
-    border: 1.5px solid var(--border);
     display: inline-flex; align-items: center; justify-content: center;
-    background: var(--panel-2);
+    transition: all 0.15s;
   }
-  .card.selected .check {
-    background: var(--accent); border-color: var(--accent);
+  .select-btn.is-selected {
+    background: rgba(200, 155, 110, 0.12);
+    border-color: var(--accent);
+    color: var(--accent);
   }
-  .card.selected .check::after {
-    content: ""; width: 5px; height: 9px;
+  .select-btn.is-selected .star {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .select-btn.is-selected .star::after {
+    content: "";
+    width: 5px; height: 9px;
     border: solid #1a1208;
     border-width: 0 2px 2px 0;
     transform: rotate(45deg) translate(-1px, -1px);
   }
-  .loading {
-    position: relative;
+
+  /* ---------- filmstrip ---------- */
+  .strip-wrap {
+    margin-top: 18px;
+    padding: 12px 28px 18px;
+    border-top: 1px solid var(--hairline);
+    background: linear-gradient(180deg, rgba(255,240,220,0.02), transparent);
   }
-  .loading::after {
-    content: ""; position: absolute; inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
-    background-size: 200% 100%;
-    animation: shimmer 1.2s infinite;
-  }
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-  #status {
+  .strip-label {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
     color: var(--muted);
+  }
+  .strip-label .strip-count { color: var(--ink-dim); }
+  .strip {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 2px 16px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-strong) transparent;
+  }
+  .strip::-webkit-scrollbar { height: 8px; }
+  .strip::-webkit-scrollbar-track { background: transparent; }
+  .strip::-webkit-scrollbar-thumb {
+    background: var(--hairline-strong);
+    border-radius: 4px;
+  }
+  .strip::-webkit-scrollbar-thumb:hover { background: var(--ink-dim); }
+
+  .frame {
+    flex: 0 0 auto;
+    width: var(--frame-w, 180px);
+    scroll-snap-align: start;
+    cursor: pointer;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    position: relative;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .frame:hover { transform: translateY(-2px); border-color: var(--hairline-strong); }
+  .frame.is-active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(200,155,110,0.15);
+  }
+  .frame canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: #000;
+  }
+  .frame canvas.loading { opacity: 0.4; }
+  .frame-meta {
+    padding: 7px 10px 8px;
+    border-top: 1px solid var(--hairline);
+    background: rgba(0,0,0,0.25);
+  }
+  .frame-name {
+    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
+    font-size: 13.5px;
+    color: var(--ink);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .frame-blurb {
+    font-size: 10px;
+    color: var(--muted);
+    margin: 1px 0 0;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .frame-check {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(20,20,25,0.7);
+    border: 1px solid var(--hairline-strong);
+    backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,240,220,0.7);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    z-index: 2;
+    opacity: 0;
+  }
+  .frame:hover .frame-check { opacity: 1; }
+  .frame.is-selected .frame-check {
+    opacity: 1;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a1208;
+  }
+  .frame-check::after {
+    content: "";
+    width: 4px; height: 8px;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+
+  /* ---------- file pill in header ---------- */
+  .file-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 10px 5px 8px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    max-width: 240px;
+  }
+  .file-pill .file-icon {
+    width: 12px; height: 14px;
+    border: 1px solid currentColor;
+    border-radius: 1px;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .file-pill .file-icon::after {
+    content: "";
+    position: absolute;
+    top: -1px; right: -1px;
+    width: 4px; height: 4px;
+    border-left: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    background: var(--bg);
+  }
+  .file-pill .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .file-pill .file-dim {
+    color: var(--muted);
+    font-family: "SF Mono", "JetBrains Mono", monospace;
+    font-size: 10.5px;
+  }
+
+  /* drag overlay */
+  #dragOverlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(11, 11, 15, 0.85);
+    backdrop-filter: blur(10px);
+    display: none;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+    color: var(--ink);
+  }
+  #dragOverlay.show { display: flex; }
+  #dragOverlay .label {
+    border: 2px dashed var(--accent);
+    border-radius: 14px;
+    padding: 48px 80px;
+    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
+    font-size: 24px;
+    letter-spacing: -0.01em;
+  }
+
+  /* toast / status pill */
+  #toast {
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translate(-50%, -160%);
+    background: rgba(20,20,25,0.94);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--accent);
+    color: var(--ink);
+    padding: 9px 18px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    letter-spacing: 0.01em;
+    z-index: 2000;
+    pointer-events: none;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    opacity: 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  #toast.show { transform: translate(-50%, 0); opacity: 1; }
+  #toast .spinner {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid var(--hairline-strong);
+    border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- edit toolbar ---------- */
+  .edit-toolbar {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    align-self: center;
+  }
+  .edit-tool {
+    appearance: none;
+    background: transparent;
+    color: var(--ink-dim);
+    border: none;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font: inherit;
     font-size: 12px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .edit-tool:hover { background: var(--surface-2); color: var(--ink); }
+  .edit-tool.is-active { background: var(--accent); color: #1a1208; }
+  .edit-tool svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* ---------- edit overlays inside hero ---------- */
+  .hero .canvas-edit-preview {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: none;
+    z-index: 2;
+  }
+  .hero.is-editing .canvas-filtered,
+  .hero.is-editing .scrubber,
+  .hero.is-editing .scrubber-handle,
+  .hero.is-editing .hero-tag { display: none; }
+  .hero.edit-rotate .canvas-original,
+  .hero.edit-perspective .canvas-original { visibility: hidden; }
+  .hero.edit-rotate .canvas-edit-preview,
+  .hero.edit-perspective .canvas-edit-preview { display: block; }
+
+  .edit-overlay {
+    position: absolute; inset: 0;
+    z-index: 3;
+    display: none;
+    pointer-events: none;
+  }
+  .hero.edit-crop .edit-overlay.crop-overlay,
+  .hero.edit-rotate .edit-overlay.rotate-overlay,
+  .hero.edit-perspective .edit-overlay.perspective-overlay { display: block; }
+
+  /* crop frame */
+  .crop-frame {
+    position: absolute;
+    border: 1px solid rgba(255,240,220,0.9);
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    pointer-events: auto;
+    cursor: move;
+  }
+  .crop-frame::before {
+    content: "";
+    position: absolute;
+    left: 33.333%; right: 33.333%; top: 0; bottom: 0;
+    border-left: 1px solid rgba(255,240,220,0.28);
+    border-right: 1px solid rgba(255,240,220,0.28);
+    pointer-events: none;
+  }
+  .crop-frame::after {
+    content: "";
+    position: absolute;
+    top: 33.333%; bottom: 33.333%; left: 0; right: 0;
+    border-top: 1px solid rgba(255,240,220,0.28);
+    border-bottom: 1px solid rgba(255,240,220,0.28);
+    pointer-events: none;
+  }
+  .crop-handle {
+    position: absolute;
+    width: 14px; height: 14px;
+    background: rgba(255,240,220,0.95);
+    border: 1px solid rgba(0,0,0,0.55);
+    border-radius: 50%;
+    pointer-events: auto;
+    z-index: 2;
+  }
+  .crop-handle.nw { top: -7px;    left: -7px;    cursor: nwse-resize; }
+  .crop-handle.ne { top: -7px;    right: -7px;   cursor: nesw-resize; }
+  .crop-handle.sw { bottom: -7px; left: -7px;    cursor: nesw-resize; }
+  .crop-handle.se { bottom: -7px; right: -7px;   cursor: nwse-resize; }
+  .crop-handle.n  { top: -7px;    left: 50%; margin-left: -7px; cursor: ns-resize; }
+  .crop-handle.s  { bottom: -7px; left: 50%; margin-left: -7px; cursor: ns-resize; }
+  .crop-handle.w  { left: -7px;   top: 50%;  margin-top: -7px;  cursor: ew-resize; }
+  .crop-handle.e  { right: -7px;  top: 50%;  margin-top: -7px;  cursor: ew-resize; }
+
+  /* rotate drag surface + guide grid */
+  .rotate-surface {
+    position: absolute; inset: 0;
+    pointer-events: auto;
+    cursor: grab;
+    background-image:
+      linear-gradient(to right, rgba(255,240,220,0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,240,220,0.07) 1px, transparent 1px);
+    background-size: 10% 10%;
+  }
+  .rotate-surface.dragging { cursor: grabbing; }
+  .rotate-readout-bubble {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    padding: 5px 10px;
+    background: rgba(20,20,25,0.85);
+    border: 1px solid var(--hairline);
+    backdrop-filter: blur(6px);
+    border-radius: 999px;
+    font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+    font-size: 11px;
+    color: var(--ink);
+    pointer-events: none;
+  }
+  .perspective-surface {
+    position: absolute; inset: 0;
+    pointer-events: auto;
+    cursor: ns-resize;
+  }
+
+  /* edit panel below hero */
+  .edit-panel {
+    display: none;
+    align-items: center;
+    gap: 14px;
+    width: var(--hero-w, min(1100px, calc(100vw - 56px)));
+    margin-top: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+  }
+  .edit-panel.show { display: flex; }
+  .edit-panel-label {
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    min-width: 88px;
+  }
+  .edit-panel-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .edit-panel-content[hidden] { display: none; }
+  .edit-panel-content .hint {
+    font-size: 12px;
+    color: var(--ink-dim);
+    letter-spacing: 0.02em;
+  }
+  .edit-panel-content input[type="range"] {
+    flex: 1;
+    appearance: none;
+    height: 2px;
+    background: var(--hairline-strong);
+    border-radius: 1px;
+    outline: none;
+    cursor: pointer;
+    min-width: 160px;
+  }
+  .edit-panel-content input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    cursor: grab;
+  }
+  .edit-panel-content input[type="range"]::-webkit-slider-thumb:active { cursor: grabbing; }
+  .edit-panel-content .readout {
+    font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+    font-size: 11.5px;
+    color: var(--ink);
+    min-width: 56px;
+    text-align: right;
+  }
+  .edit-panel-content .seg {
+    display: inline-flex;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .edit-panel-content .seg button {
+    appearance: none;
+    background: transparent;
+    color: var(--ink-dim);
+    border: none;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .edit-panel-content .seg button:hover { background: var(--surface-2); color: var(--ink); }
+  .edit-panel-content .seg button + button { border-left: 1px solid var(--hairline-strong); }
+  .edit-panel-actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
+
+  @media (max-width: 720px) {
+    header { padding: 12px 16px; gap: 10px; }
+    .brand-sub, .head-meta { display: none; }
+    .hero-wrap { padding: 16px 16px 0; }
+    .hero, .hero-meta { width: 100%; }
+    .hero-meta { grid-template-columns: 1fr; gap: 18px; }
+    .strip-wrap { padding: 16px 16px 24px; }
+    .frame { width: 160px; }
   }
 </style>
 </head>
 <body>
-  <header>
-    <h1>Film Preset Viewer</h1>
-    <span id="status"></span>
-    <div class="controls">
-      <label class="file-label btn">
-        Choose photo
-        <input type="file" id="file" accept="image/*">
-      </label>
-      <button id="selectAll" class="btn" disabled>Select all</button>
-      <button id="download" class="btn btn-primary" disabled>Download (0)</button>
-    </div>
-  </header>
-  <div id="empty" class="empty">
-    <h2>Pick a photo to begin</h2>
-    <p>Eight Fujifilm-inspired presets will be previewed instantly.</p>
+
+<header>
+  <div class="brand">
+    <span class="brand-mark">photofilm</span>
+    <span class="brand-sub">analog lab</span>
   </div>
-  <main id="grid" class="grid" style="display:none"></main>
+  <div class="head-meta" id="headMeta" hidden>
+    <span class="file-pill" id="filePill">
+      <span class="file-icon"></span>
+      <span class="file-name" id="fileName">—</span>
+      <span class="file-dim" id="fileDim"></span>
+    </span>
+  </div>
+  <div class="head-actions">
+    <label class="btn btn-ghost" id="changeBtn" hidden>
+      <span>Change photo</span>
+      <input type="file" id="file" accept="image/*,.cr2,.cr3,.nef,.arw,.dng,.raf,.orf,.rw2,.pef,.srw,.crw,.x3f,.nrw,.3fr">
+    </label>
+    <button class="btn" id="selectAllBtn" disabled>Select all <span class="kbd">A</span></button>
+    <button class="btn btn-primary" id="downloadBtn" disabled>
+      <span id="downloadLabel">Export</span>
+    </button>
+  </div>
+</header>
+
+<section id="empty">
+  <div class="drop-card" id="dropCard">
+    <div class="drop-eyebrow">Eight film stocks · one photo</div>
+    <h1 class="serif">Drop a frame.<br><em>Watch it remember.</em></h1>
+    <p>Pick a photo and see how eight film moods read it — from Velvia's punch to Japan-Night's tungsten halation. JPEG, PNG, HEIC, and most RAW formats (CR2/3, NEF, ARW, DNG, RAF, ORF…).</p>
+    <div class="drop-actions">
+      <label class="btn btn-primary">
+        Choose photo
+        <input type="file" id="fileFirst" accept="image/*,.cr2,.cr3,.nef,.arw,.dng,.raf,.orf,.rw2,.pef,.srw,.crw,.x3f,.nrw,.3fr">
+      </label>
+      <span class="drop-hint">or drag & drop · paste from clipboard</span>
+    </div>
+  </div>
+</section>
+
+<section id="workspace">
+  <div class="hero-wrap">
+    <div class="edit-toolbar" id="editToolbar">
+      <button class="edit-tool" data-tool="crop">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 1v11h11M1 4h11v11"/></svg>
+        Crop
+      </button>
+      <button class="edit-tool" data-tool="rotate">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 8a5.5 5.5 0 1 1-1.86-4.12"/><path d="M13.5 1.5v3h-3"/></svg>
+        Rotate
+      </button>
+      <button class="edit-tool" data-tool="perspective">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 2.5l10 1.5v8L3 13.5z"/></svg>
+        Perspective
+      </button>
+    </div>
+    <div class="hero" id="hero">
+      <canvas class="canvas-original" id="heroOrigCanvas"></canvas>
+      <canvas class="canvas-filtered" id="heroFilteredCanvas"></canvas>
+      <canvas class="canvas-edit-preview" id="heroEditPreview"></canvas>
+      <div class="hero-tag left" id="heroTagLeft">—</div>
+      <div class="hero-tag right">Original</div>
+      <div class="scrubber"></div>
+      <div class="scrubber-handle" id="scrubberHandle" title="Drag to compare"></div>
+
+      <div class="edit-overlay crop-overlay" id="cropOverlay">
+        <div class="crop-frame" id="cropFrame">
+          <div class="crop-handle nw" data-handle="nw"></div>
+          <div class="crop-handle n"  data-handle="n"></div>
+          <div class="crop-handle ne" data-handle="ne"></div>
+          <div class="crop-handle e"  data-handle="e"></div>
+          <div class="crop-handle se" data-handle="se"></div>
+          <div class="crop-handle s"  data-handle="s"></div>
+          <div class="crop-handle sw" data-handle="sw"></div>
+          <div class="crop-handle w"  data-handle="w"></div>
+        </div>
+      </div>
+      <div class="edit-overlay rotate-overlay">
+        <div class="rotate-surface" id="rotateSurface"></div>
+        <div class="rotate-readout-bubble" id="rotateBubble">0.0°</div>
+      </div>
+      <div class="edit-overlay perspective-overlay">
+        <div class="perspective-surface" id="perspectiveSurface"></div>
+      </div>
+    </div>
+
+    <div class="hero-meta">
+      <div>
+        <h2 class="stock-name" id="stockName">—</h2>
+        <p class="stock-blurb" id="stockBlurb">—</p>
+      </div>
+      <div class="hero-controls">
+        <div class="intensity">
+          <span>Intensity</span>
+          <input type="range" id="intensity" min="0" max="100" value="100">
+          <span class="intensity-val mono" id="intensityVal">100%</span>
+        </div>
+        <button class="select-btn" id="selectBtn">
+          <span class="star"></span>
+          <span id="selectBtnLabel">Add to export</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="edit-panel" id="editPanel">
+      <span class="edit-panel-label" id="editPanelLabel">Crop</span>
+      <div class="edit-panel-content" data-tool="crop" id="cropPanel">
+        <span class="hint">Drag the frame or its handles to adjust. Click <strong>Apply</strong> to commit.</span>
+      </div>
+      <div class="edit-panel-content" data-tool="rotate" id="rotatePanel" hidden>
+        <span class="hint" style="min-width:0">Drag the image, or use the slider:</span>
+        <input type="range" id="rotateSlider" min="-45" max="45" step="0.1" value="0">
+        <span class="readout" id="rotateReadout">0.0°</span>
+        <div class="seg">
+          <button id="rotate90L" title="Rotate 90° left">⟲ 90°</button>
+          <button id="rotate90R" title="Rotate 90° right">⟳ 90°</button>
+        </div>
+      </div>
+      <div class="edit-panel-content" data-tool="perspective" id="perspectivePanel" hidden>
+        <span class="hint" style="min-width:0">Tilt forward / backward:</span>
+        <input type="range" id="perspectiveSlider" min="-50" max="50" step="1" value="0">
+        <span class="readout" id="perspectiveReadout">0</span>
+      </div>
+      <div class="edit-panel-actions">
+        <button class="btn" id="editCancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="editApplyBtn">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="strip-wrap">
+    <div class="strip-label">
+      <span>Contact sheet</span>
+      <span class="strip-count" id="stripCount">0 selected</span>
+    </div>
+    <div class="strip" id="strip"></div>
+  </div>
+</section>
+
+<div id="dragOverlay"><div class="label">Drop the frame</div></div>
+<div id="toast"><span class="spinner"></span><span id="toastText">Loading…</span></div>
 
 <script>
 "use strict";
 
-// ---------- Preset definitions (ported from photofilm/presets.py) ----------
+// ---------- Preset definitions ----------
 const FILM_CURVE = [[0.0, 0.04], [0.25, 0.22], [0.5, 0.5], [0.75, 0.78], [1.0, 0.96]];
 
 const PRESETS = {
-  "classic-chrome": [
-    ["tone_curve", { points: FILM_CURVE }],
-    ["white_balance", { temp: 0.15, tint: -0.05 }],
-    ["saturation", { amount: -0.25 }],
-    ["channel_saturation", { reds: -0.15, greens: 0.05, blues: 0.10 }],
-    ["contrast", { amount: 0.10 }],
-    ["grain", { amount: 0.4 }],
-  ],
-  "velvia": [
-    ["tone_curve", { points: FILM_CURVE }],
-    ["contrast", { amount: 0.25 }],
-    ["saturation", { amount: 0.35 }],
-    ["channel_saturation", { reds: 0.25, greens: 0.30, blues: 0.15 }],
-    ["grain", { amount: 0.2 }],
-  ],
-  "provia": [
-    ["tone_curve", { points: FILM_CURVE }],
-    ["saturation", { amount: 0.10 }],
-    ["contrast", { amount: 0.08 }],
-    ["grain", { amount: 0.25 }],
-  ],
-  "astia": [
-    ["tone_curve", { points: [[0.0, 0.06], [0.3, 0.30], [0.7, 0.74], [1.0, 0.95]] }],
-    ["white_balance", { temp: 0.20, tint: 0.05 }],
-    ["saturation", { amount: 0.05 }],
-    ["channel_saturation", { reds: 0.15, greens: -0.10, blues: -0.05 }],
-    ["grain", { amount: 0.2 }],
-  ],
-  "acros": [
-    ["monochrome", { red: 0.4, green: 0.4, blue: 0.2 }],
-    ["tone_curve", { points: [[0.0, 0.02], [0.3, 0.22], [0.7, 0.80], [1.0, 0.98]] }],
-    ["contrast", { amount: 0.15 }],
-    ["grain", { amount: 0.6 }],
-  ],
-  "synthwave": [
-    ["contrast", { amount: 0.20 }],
-    ["tone_curve", { points: [[0.0, 0.08], [0.3, 0.32], [0.7, 0.78], [1.0, 1.0]], channel: "r" }],
-    ["tone_curve", { points: [[0.0, 0.0], [0.3, 0.16], [0.7, 0.48], [1.0, 0.82]], channel: "g" }],
-    ["tone_curve", { points: [[0.0, 0.28], [0.3, 0.50], [0.7, 0.78], [1.0, 0.95]], channel: "b" }],
-    ["saturation", { amount: 0.40 }],
-    ["bloom", { threshold: 0.55, blur_radius: 30.0, amount: 0.55 }],
-    ["grain", { amount: 0.25 }],
-  ],
-  "japan-night": [
-    ["tone_curve", { points: [[0.0, 0.03], [0.25, 0.20], [0.5, 0.48], [0.75, 0.78], [1.0, 0.97]] }],
-    ["tone_curve", { points: [[0.0, 0.02], [0.3, 0.28], [0.7, 0.82], [1.0, 1.0]], channel: "r" }],
-    ["tone_curve", { points: [[0.0, 0.04], [0.3, 0.24], [0.7, 0.70], [1.0, 0.92]], channel: "g" }],
-    ["tone_curve", { points: [[0.0, 0.10], [0.3, 0.32], [0.7, 0.58], [1.0, 0.80]], channel: "b" }],
-    ["saturation", { amount: -0.10 }],
-    ["channel_saturation", { reds: 0.25, greens: -0.10, blues: 0.15 }],
-    ["contrast", { amount: 0.12 }],
-    ["bloom", { threshold: 0.60, blur_radius: 22.0, amount: 0.35 }],
-    ["grain", { amount: 0.35 }],
-  ],
-  "eterna": [
-    ["tone_curve", { points: [[0.0, 0.08], [0.5, 0.48], [1.0, 0.88]] }],
-    ["saturation", { amount: -0.30 }],
-    ["white_balance", { temp: 0.05, tint: -0.05 }],
-    ["contrast", { amount: -0.10 }],
-    ["grain", { amount: 0.3 }],
-  ],
+  "classic-chrome": {
+    title: "Classic Chrome",
+    blurb: "Muted travel-doc tones. Lifted blacks, cyan shadows.",
+    ops: [
+      ["tone_curve", { points: FILM_CURVE }],
+      ["white_balance", { temp: 0.15, tint: -0.05 }],
+      ["saturation", { amount: -0.25 }],
+      ["channel_saturation", { reds: -0.15, greens: 0.05, blues: 0.10 }],
+      ["contrast", { amount: 0.10 }],
+      ["grain", { amount: 0.4 }],
+    ],
+  },
+  "velvia": {
+    title: "Velvia",
+    blurb: "Punchy landscape stock with rich greens and blues.",
+    ops: [
+      ["tone_curve", { points: FILM_CURVE }],
+      ["contrast", { amount: 0.25 }],
+      ["saturation", { amount: 0.35 }],
+      ["channel_saturation", { reds: 0.25, greens: 0.30, blues: 0.15 }],
+      ["grain", { amount: 0.2 }],
+    ],
+  },
+  "provia": {
+    title: "Provia",
+    blurb: "Balanced daily driver. Restrained, realistic, neutral.",
+    ops: [
+      ["tone_curve", { points: FILM_CURVE }],
+      ["saturation", { amount: 0.10 }],
+      ["contrast", { amount: 0.08 }],
+      ["grain", { amount: 0.25 }],
+    ],
+  },
+  "astia": {
+    title: "Astia",
+    blurb: "Portrait stock — soft skin, creamy highlights.",
+    ops: [
+      ["tone_curve", { points: [[0.0, 0.06], [0.3, 0.30], [0.7, 0.74], [1.0, 0.95]] }],
+      ["white_balance", { temp: 0.20, tint: 0.05 }],
+      ["saturation", { amount: 0.05 }],
+      ["channel_saturation", { reds: 0.15, greens: -0.10, blues: -0.05 }],
+      ["grain", { amount: 0.2 }],
+    ],
+  },
+  "acros": {
+    title: "Acros",
+    blurb: "Silver-halide monochrome with deep, painterly grain.",
+    ops: [
+      ["monochrome", { red: 0.4, green: 0.4, blue: 0.2 }],
+      ["tone_curve", { points: [[0.0, 0.02], [0.3, 0.22], [0.7, 0.80], [1.0, 0.98]] }],
+      ["contrast", { amount: 0.15 }],
+      ["grain", { amount: 0.6 }],
+    ],
+  },
+  "synthwave": {
+    title: "Synthwave",
+    blurb: "Neon dreams. Magenta bloom and retro-future glow.",
+    ops: [
+      ["contrast", { amount: 0.20 }],
+      ["tone_curve", { points: [[0.0, 0.08], [0.3, 0.32], [0.7, 0.78], [1.0, 1.0]], channel: "r" }],
+      ["tone_curve", { points: [[0.0, 0.0], [0.3, 0.16], [0.7, 0.48], [1.0, 0.82]], channel: "g" }],
+      ["tone_curve", { points: [[0.0, 0.28], [0.3, 0.50], [0.7, 0.78], [1.0, 0.95]], channel: "b" }],
+      ["saturation", { amount: 0.40 }],
+      ["bloom", { threshold: 0.55, blur_radius: 30.0, amount: 0.55 }],
+      ["grain", { amount: 0.25 }],
+    ],
+  },
+  "japan-night": {
+    title: "Japan Night",
+    blurb: "CineStill 800T tungsten with halation and neon haze.",
+    ops: [
+      ["tone_curve", { points: [[0.0, 0.03], [0.25, 0.20], [0.5, 0.48], [0.75, 0.78], [1.0, 0.97]] }],
+      ["tone_curve", { points: [[0.0, 0.02], [0.3, 0.28], [0.7, 0.82], [1.0, 1.0]], channel: "r" }],
+      ["tone_curve", { points: [[0.0, 0.04], [0.3, 0.24], [0.7, 0.70], [1.0, 0.92]], channel: "g" }],
+      ["tone_curve", { points: [[0.0, 0.10], [0.3, 0.32], [0.7, 0.58], [1.0, 0.80]], channel: "b" }],
+      ["saturation", { amount: -0.10 }],
+      ["channel_saturation", { reds: 0.25, greens: -0.10, blues: 0.15 }],
+      ["contrast", { amount: 0.12 }],
+      ["bloom", { threshold: 0.60, blur_radius: 22.0, amount: 0.35 }],
+      ["grain", { amount: 0.35 }],
+    ],
+  },
+  "eterna": {
+    title: "Eterna",
+    blurb: "Cinematic flat profile. Soft, expensive, understated.",
+    ops: [
+      ["tone_curve", { points: [[0.0, 0.08], [0.5, 0.48], [1.0, 0.88]] }],
+      ["saturation", { amount: -0.30 }],
+      ["white_balance", { temp: 0.05, tint: -0.05 }],
+      ["contrast", { amount: -0.10 }],
+      ["grain", { amount: 0.3 }],
+    ],
+  },
 };
 
-// ---------- Filter operations on a Float32Array of length width*height*3 ----------
+// ---------- Filter operations ----------
 const CH = { r: 0, g: 1, b: 2 };
 
 function buildLut(points) {
@@ -299,7 +1116,6 @@ function opContrast(buf, n, { amount = 0 }) {
   }
 }
 
-// Box-Muller for Gaussian noise, seeded with mulberry32
 function mulberry32(seed) {
   return function() {
     let t = seed += 0x6D2B79F5;
@@ -337,7 +1153,6 @@ function opMonochrome(buf, n, { red = 0.3, green = 0.5, blue = 0.2 }) {
   }
 }
 
-// Bloom: threshold bright pixels, blur via canvas, screen-blend back.
 function opBloom(buf, n, width, height, { threshold = 0.6, blur_radius = 20.0, amount = 0.5 }) {
   if (amount <= 0) return;
   const denom = Math.max(1e-3, 1.0 - threshold);
@@ -409,7 +1224,7 @@ function applyPreset(srcImageData, presetName, width, height) {
   );
   const buf = imageDataToFloat(out);
   const n = width * height;
-  for (const [op, args] of PRESETS[presetName]) {
+  for (const [op, args] of PRESETS[presetName].ops) {
     switch (op) {
       case "tone_curve":         opToneCurve(buf, n, args); break;
       case "white_balance":      opWhiteBalance(buf, n, args); break;
@@ -425,57 +1240,92 @@ function applyPreset(srcImageData, presetName, width, height) {
   return out;
 }
 
-// ---------- UI ----------
-const fileInput   = document.getElementById("file");
-const grid        = document.getElementById("grid");
-const empty       = document.getElementById("empty");
-const downloadBtn = document.getElementById("download");
-const selectAllBtn = document.getElementById("selectAll");
-const statusEl    = document.getElementById("status");
+// ---------- App state ----------
+const THUMB_MAX = 280;
+const HERO_MAX  = 1200;
 
-const selected = new Set();
-let sourceImage = null;
-let sourceName  = "image";
-let previewImageData = null;  // downscaled
-let previewW = 0, previewH = 0;
+const state = {
+  sourceCanvas: null,  // HTMLCanvasElement holding the working source (EXIF-oriented + edits baked in)
+  sourceName: "image",
+  thumbData: null,   // ImageData
+  thumbW: 0, thumbH: 0,
+  heroData: null,    // ImageData (original at hero resolution)
+  heroW: 0, heroH: 0,
+  heroCache: new Map(),  // presetName -> ImageData at hero resolution
+  active: null,
+  selected: new Set(),
+  intensity: 1.0,
+  split: 1.0,  // 0..1, fraction of width where scrubber is
+  editMode: null,   // 'crop' | 'rotate' | 'perspective' | null
+  editParams: {     // tool-specific working values
+    crop: { x: 0, y: 0, w: 1, h: 1 },  // fractions of source
+    rotate: { angle: 0 },              // degrees
+    perspective: { amount: 0 },        // -0.5..0.5
+  },
+};
 
-const PREVIEW_MAX = 500;
+// ---------- DOM ----------
+const $ = (id) => document.getElementById(id);
+const dropCard      = $("dropCard");
+const empty         = $("empty");
+const workspace     = $("workspace");
+const fileFirst     = $("fileFirst");
+const fileInput     = $("file");
+const changeBtn     = $("changeBtn");
+const headMeta      = $("headMeta");
+const fileName      = $("fileName");
+const fileDim       = $("fileDim");
+const heroEl        = $("hero");
+const heroOrig      = $("heroOrigCanvas");
+const heroFiltered  = $("heroFilteredCanvas");
+const heroTagLeft   = $("heroTagLeft");
+const scrubberHandle= $("scrubberHandle");
+const stockName     = $("stockName");
+const stockBlurb    = $("stockBlurb");
+const intensityInp  = $("intensity");
+const intensityVal  = $("intensityVal");
+const selectBtn     = $("selectBtn");
+const selectBtnLabel= $("selectBtnLabel");
+const stripEl       = $("strip");
+const stripCount    = $("stripCount");
+const selectAllBtn  = $("selectAllBtn");
+const downloadBtn   = $("downloadBtn");
+const downloadLabel = $("downloadLabel");
+const dragOverlay   = $("dragOverlay");
 
-function updateDownloadBtn() {
-  downloadBtn.disabled = selected.size === 0;
-  downloadBtn.textContent = `Download (${selected.size})`;
+const editToolbar     = $("editToolbar");
+const editPanel       = $("editPanel");
+const editPanelLabel  = $("editPanelLabel");
+const cropPanel       = $("cropPanel");
+const rotatePanel     = $("rotatePanel");
+const perspectivePanel= $("perspectivePanel");
+const editApplyBtn    = $("editApplyBtn");
+const editCancelBtn   = $("editCancelBtn");
+const heroEditPreview = $("heroEditPreview");
+const cropOverlay     = $("cropOverlay");
+const cropFrame       = $("cropFrame");
+const rotateSurface   = $("rotateSurface");
+const rotateBubble    = $("rotateBubble");
+const rotateSlider    = $("rotateSlider");
+const rotateReadout   = $("rotateReadout");
+const rotate90L       = $("rotate90L");
+const rotate90R       = $("rotate90R");
+const perspectiveSurface = $("perspectiveSurface");
+const perspectiveSlider  = $("perspectiveSlider");
+const perspectiveReadout = $("perspectiveReadout");
+
+// ---------- Helpers ----------
+const RAW_EXT = /\.(cr2|cr3|nef|arw|dng|raf|orf|rw2|pef|srw|crw|x3f|nrw|3fr)$/i;
+const IMG_EXT = /\.(jpe?g|png|gif|bmp|tiff?|webp|heic|heif|avif)$/i;
+
+function isLoadableImage(file) {
+  if (file.type && file.type.startsWith("image/")) return true;
+  return RAW_EXT.test(file.name) || IMG_EXT.test(file.name);
 }
 
-function setStatus(msg) { statusEl.textContent = msg; }
-
-fileInput.addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  sourceName = file.name.replace(/\.[^.]+$/, "");
-  setStatus("Loading…");
-  const img = await loadImage(file);
-  sourceImage = img;
-
-  // Build downscaled preview source.
-  const scale = Math.min(1, PREVIEW_MAX / Math.max(img.width, img.height));
-  previewW = Math.max(1, Math.round(img.width * scale));
-  previewH = Math.max(1, Math.round(img.height * scale));
-  const c = document.createElement("canvas");
-  c.width = previewW; c.height = previewH;
-  const ctx = c.getContext("2d");
-  ctx.drawImage(img, 0, 0, previewW, previewH);
-  previewImageData = ctx.getImageData(0, 0, previewW, previewH);
-
-  buildGrid();
-  empty.style.display = "none";
-  grid.style.display = "grid";
-  selectAllBtn.disabled = false;
-  setStatus(`${img.width}×${img.height}`);
-});
-
-function loadImage(file) {
+function loadImage(blobOrFile) {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+    const url = URL.createObjectURL(blobOrFile);
     const img = new Image();
     img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
     img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
@@ -483,93 +1333,864 @@ function loadImage(file) {
   });
 }
 
-function buildGrid() {
-  grid.innerHTML = "";
-  selected.clear();
-  updateDownloadBtn();
+// Decode a blob into a canvas with EXIF orientation baked in, so portrait
+// photos read out as portrait pixels regardless of the storage orientation.
+async function loadOrientedCanvas(blob) {
+  try {
+    const bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" });
+    const c = document.createElement("canvas");
+    c.width = bitmap.width;
+    c.height = bitmap.height;
+    c.getContext("2d").drawImage(bitmap, 0, 0);
+    bitmap.close && bitmap.close();
+    return c;
+  } catch (e) {
+    const img = await loadImage(blob);
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth || img.width;
+    c.height = img.naturalHeight || img.height;
+    c.getContext("2d").drawImage(img, 0, 0);
+    return c;
+  }
+}
+
+// Walk JPEG markers starting at SOI and return the Start-Of-Frame marker byte,
+// or null if the structure is malformed. Used to reject Canon CR2's raw sensor
+// data, which is stored as a giant lossless JPEG (SOF3) that browsers can't
+// decode.
+function jpegSofMarker(bytes, start) {
+  const end = Math.min(bytes.length - 1, start + 8192);
+  let i = start + 2; // past SOI
+  while (i < end) {
+    if (bytes[i] !== 0xFF) return null;
+    while (i < end && bytes[i] === 0xFF) i++;  // skip fill bytes
+    const marker = bytes[i++];
+    if (marker === 0xD9 || marker === 0xDA) return marker; // EOI or SOS — no SOF seen
+    if ((marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) continue; // standalone
+    // SOF markers: 0xC0–0xCF except DHT (C4), JPG (C8), DAC (CC)
+    if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+      return marker;
+    }
+    if (i + 1 >= bytes.length) return null;
+    const length = (bytes[i] << 8) | bytes[i + 1];
+    i += length;
+  }
+  return null;
+}
+
+// A SOF marker browsers can decode: baseline (C0), extended sequential (C1),
+// progressive (C2). Lossless (C3) and the differential/arithmetic variants
+// are not decodable by canvas — Canon CR2 stores raw sensor data as SOF3.
+function isBrowserDecodableSof(marker) {
+  return marker === 0xC0 || marker === 0xC1 || marker === 0xC2;
+}
+
+// Find the largest browser-decodable JPEG segment in a buffer. Works for
+// CR2/NEF/ARW/DNG/RAF and most other RAW formats since they embed a full-res
+// JPEG preview alongside the raw data.
+function findLargestJpeg(bytes) {
+  const n = bytes.length;
+  let bestStart = -1, bestLen = 0;
+  let i = 0;
+  while (i < n - 3) {
+    if (bytes[i] === 0xFF && bytes[i + 1] === 0xD8 && bytes[i + 2] === 0xFF) {
+      // Bound the EOI search to 64MB to avoid scanning into raw sensor data
+      // if a stray FF D8 FF appears in it.
+      const limit = Math.min(n - 1, i + 64 * 1024 * 1024);
+      let j = i + 3, end = -1;
+      while (j < limit) {
+        if (bytes[j] === 0xFF && bytes[j + 1] === 0xD9) { end = j + 2; break; }
+        j++;
+      }
+      if (end > 0) {
+        const len = end - i;
+        // Only consider candidates whose SOF marker the browser can actually
+        // decode. Skips Canon CR2's raw sensor data (SOF3 lossless JPEG),
+        // which is typically the largest "JPEG-shaped" blob in the file.
+        if (len > bestLen && isBrowserDecodableSof(jpegSofMarker(bytes, i))) {
+          bestStart = i; bestLen = len;
+        }
+        i = end;
+      } else {
+        i++;
+      }
+    } else {
+      i++;
+    }
+  }
+  if (bestStart < 0) return null;
+  return { start: bestStart, length: bestLen };
+}
+
+async function extractEmbeddedJpeg(file) {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const found = findLargestJpeg(bytes);
+  if (!found) return null;
+  return new Blob([bytes.slice(found.start, found.start + found.length)], { type: "image/jpeg" });
+}
+
+function setStatus(msg) {
+  const toast = $("toast");
+  const text  = $("toastText");
+  if (!msg) { toast.classList.remove("show"); return; }
+  text.textContent = msg;
+  toast.classList.add("show");
+}
+
+function downscaleToImageData(src, maxEdge) {
+  const sw = src.width, sh = src.height;
+  const scale = Math.min(1, maxEdge / Math.max(sw, sh));
+  const w = Math.max(1, Math.round(sw * scale));
+  const h = Math.max(1, Math.round(sh * scale));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(src, 0, 0, w, h);
+  return { data: ctx.getImageData(0, 0, w, h), w, h };
+}
+
+// Rebuild thumbnail + hero ImageData from the current sourceCanvas, then
+// re-render whatever depends on them. Used after a load OR after an edit
+// (crop/rotate/perspective) is applied.
+function rebuildFromSource() {
+  const src = state.sourceCanvas;
+  const thumb = downscaleToImageData(src, THUMB_MAX);
+  state.thumbData = thumb.data;
+  state.thumbW = thumb.w;
+  state.thumbH = thumb.h;
+  const hero = downscaleToImageData(src, HERO_MAX);
+  state.heroData = hero.data;
+  state.heroW = hero.w;
+  state.heroH = hero.h;
+  state.heroCache.clear();
+  fileDim.textContent = `${src.width}×${src.height}`;
+  sizeViewport();
+  buildStrip();
+}
+
+function setCanvasFromImageData(canvas, imgData, w, h) {
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d").putImageData(imgData, 0, 0);
+}
+
+function nextFrame() { return new Promise(r => requestAnimationFrame(r)); }
+
+// Fit hero + filmstrip into one viewport given the photo's aspect ratio.
+function sizeViewport() {
+  if (!state.sourceCanvas) return;
+  const aspect = state.sourceCanvas.width / state.sourceCanvas.height;
+
+  // Frame width adapts to orientation so portraits don't make the strip tall.
+  const frameW = aspect >= 1 ? 180 : 120;
+  const frameH = frameW / aspect;
+  // Strip vertical footprint: border + top padding + label + frame + meta + bottom padding.
+  const stripH = 1 + 12 + 10 + 16 + frameH + 36 + 18 + 8 /* scrollbar */;
+  // Reserve for: header + hero-wrap top pad + gap + meta + strip + tail buffer.
+  const reserved = 56 + 20 + 14 + 78 + stripH + 8;
+  const maxH = Math.max(220, window.innerHeight - reserved);
+  const maxW = Math.min(1100, window.innerWidth - 56);
+
+  let w = maxW;
+  let h = w / aspect;
+  if (h > maxH) { h = maxH; w = h * aspect; }
+  w = Math.round(w); h = Math.round(h);
+
+  document.documentElement.style.setProperty("--hero-w", `${w}px`);
+  document.documentElement.style.setProperty("--hero-h", `${h}px`);
+  document.documentElement.style.setProperty("--frame-w", `${frameW}px`);
+}
+
+let _resizeRaf = 0;
+window.addEventListener("resize", () => {
+  if (_resizeRaf) cancelAnimationFrame(_resizeRaf);
+  _resizeRaf = requestAnimationFrame(sizeViewport);
+});
+
+// ---------- Loading a new photo ----------
+async function loadFromFile(file) {
+  if (!file || !isLoadableImage(file)) return;
+  if (state.editMode) exitEditMode(false);
+  state.sourceName = file.name.replace(/\.[^.]+$/, "") || "image";
+
+  let decodable = file;
+  try {
+    if (RAW_EXT.test(file.name)) {
+      setStatus("Extracting preview from RAW…");
+      // Yield so the spinner can paint before the heavy buffer scan.
+      await new Promise(r => setTimeout(r, 16));
+      const jpeg = await extractEmbeddedJpeg(file);
+      if (!jpeg) {
+        setStatus("No JPEG preview found in this RAW file");
+        setTimeout(() => setStatus(""), 2400);
+        return;
+      }
+      decodable = jpeg;
+    } else {
+      setStatus("Loading…");
+    }
+    state.sourceCanvas = await loadOrientedCanvas(decodable);
+    setStatus("");
+  } catch (err) {
+    console.error(err);
+    setStatus("Couldn't decode this file");
+    setTimeout(() => setStatus(""), 2400);
+    return;
+  }
+
+  // Reveal workspace.
+  fileName.textContent = file.name;
+  headMeta.hidden = false;
+  changeBtn.hidden = false;
+  empty.style.display = "none";
+  workspace.classList.add("active");
+  selectAllBtn.disabled = false;
+
+  // Reset selection but keep intensity/split for muscle memory.
+  state.selected.clear();
+  updateSelectionUI();
+
+  // Build thumb/hero, size viewport, build strip.
+  rebuildFromSource();
+
+  // Keep current active preset across photo changes; else first key.
+  const next = state.active && PRESETS[state.active]
+    ? state.active
+    : Object.keys(PRESETS)[0];
+  await setActive(next);
+}
+
+// ---------- Hero rendering ----------
+async function setActive(presetName) {
+  state.active = presetName;
+  const preset = PRESETS[presetName];
+
+  stockName.textContent = preset.title;
+  stockBlurb.textContent = preset.blurb;
+  heroTagLeft.textContent = preset.title;
+
+  document.querySelectorAll(".frame").forEach(f => {
+    f.classList.toggle("is-active", f.dataset.preset === presetName);
+  });
+  // Scroll active into view in the strip.
+  const activeFrame = stripEl.querySelector(`[data-preset="${presetName}"]`);
+  if (activeFrame) {
+    activeFrame.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }
+
+  updateSelectBtn();
+
+  // Draw original immediately.
+  setCanvasFromImageData(heroOrig, state.heroData, state.heroW, state.heroH);
+
+  // Compute or fetch filtered hero.
+  let filtered = state.heroCache.get(presetName);
+  if (!filtered) {
+    heroEl.classList.add("is-loading");
+    await nextFrame();
+    filtered = applyPreset(state.heroData, presetName, state.heroW, state.heroH);
+    state.heroCache.set(presetName, filtered);
+    heroEl.classList.remove("is-loading");
+  }
+  setCanvasFromImageData(heroFiltered, filtered, state.heroW, state.heroH);
+}
+
+// ---------- Strip ----------
+function buildStrip() {
+  stripEl.innerHTML = "";
   const names = Object.keys(PRESETS);
   for (const name of names) {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.dataset.preset = name;
-    card.innerHTML = `
-      <canvas class="preview loading" width="${previewW}" height="${previewH}"></canvas>
-      <div class="card-body">
-        <span class="name">${name}</span>
-        <span class="check" aria-hidden="true"></span>
+    const preset = PRESETS[name];
+    const frame = document.createElement("div");
+    frame.className = "frame";
+    frame.dataset.preset = name;
+    frame.innerHTML = `
+      <canvas class="loading" width="${state.thumbW}" height="${state.thumbH}"></canvas>
+      <div class="frame-meta">
+        <p class="frame-name">${preset.title}</p>
+        <p class="frame-blurb">${preset.blurb}</p>
       </div>
+      <div class="frame-check" title="Add to export"></div>
     `;
-    card.addEventListener("click", () => {
-      if (selected.has(name)) selected.delete(name);
-      else selected.add(name);
-      card.classList.toggle("selected");
-      updateDownloadBtn();
+    frame.addEventListener("click", (e) => {
+      // Click on check toggles selection without changing active.
+      if (e.target.classList.contains("frame-check")) {
+        e.stopPropagation();
+        toggleSelected(name);
+        return;
+      }
+      setActive(name);
     });
-    grid.appendChild(card);
+    stripEl.appendChild(frame);
   }
-  // Render previews progressively so the UI stays responsive.
+  // Progressive thumb rendering.
   (async () => {
     for (const name of names) {
-      await new Promise(r => requestAnimationFrame(r));
-      const card = grid.querySelector(`[data-preset="${name}"]`);
-      const canvas = card.querySelector("canvas");
+      await nextFrame();
+      const frame = stripEl.querySelector(`[data-preset="${name}"]`);
+      if (!frame) continue;
+      const canvas = frame.querySelector("canvas");
       const ctx = canvas.getContext("2d");
-      const out = applyPreset(previewImageData, name, previewW, previewH);
+      const out = applyPreset(state.thumbData, name, state.thumbW, state.thumbH);
       ctx.putImageData(out, 0, 0);
       canvas.classList.remove("loading");
     }
   })();
 }
 
-selectAllBtn.addEventListener("click", () => {
-  const cards = grid.querySelectorAll(".card");
-  const allSelected = selected.size === cards.length;
-  selected.clear();
-  cards.forEach(card => {
-    if (!allSelected) {
-      selected.add(card.dataset.preset);
-      card.classList.add("selected");
-    } else {
-      card.classList.remove("selected");
-    }
+// ---------- Selection ----------
+function toggleSelected(name) {
+  if (state.selected.has(name)) state.selected.delete(name);
+  else state.selected.add(name);
+  updateSelectionUI();
+}
+
+function updateSelectionUI() {
+  document.querySelectorAll(".frame").forEach(f => {
+    f.classList.toggle("is-selected", state.selected.has(f.dataset.preset));
   });
-  selectAllBtn.textContent = allSelected ? "Select all" : "Clear selection";
-  updateDownloadBtn();
+  const n = state.selected.size;
+  stripCount.textContent = `${n} selected`;
+  downloadBtn.disabled = n === 0;
+  downloadLabel.textContent = n === 0 ? "Export" : (n === 1 ? "Export 1" : `Export ${n}`);
+  selectAllBtn.textContent = n === Object.keys(PRESETS).length
+    ? "Clear all"
+    : "Select all";
+  updateSelectBtn();
+}
+
+function updateSelectBtn() {
+  const isSelected = state.selected.has(state.active);
+  selectBtn.classList.toggle("is-selected", isSelected);
+  selectBtnLabel.textContent = isSelected ? "Added to export" : "Add to export";
+}
+
+selectBtn.addEventListener("click", () => {
+  if (!state.active) return;
+  toggleSelected(state.active);
 });
 
+selectAllBtn.addEventListener("click", () => {
+  const all = Object.keys(PRESETS);
+  const allSelected = state.selected.size === all.length;
+  state.selected.clear();
+  if (!allSelected) all.forEach(n => state.selected.add(n));
+  updateSelectionUI();
+});
+
+// ---------- Intensity + scrubber ----------
+intensityInp.addEventListener("input", () => {
+  const v = +intensityInp.value;
+  state.intensity = v / 100;
+  intensityVal.textContent = `${v}%`;
+  heroEl.style.setProperty("--intensity", state.intensity);
+});
+
+function setSplit(fraction) {
+  state.split = Math.max(0, Math.min(1, fraction));
+  heroEl.style.setProperty("--split", `${(state.split * 100).toFixed(2)}%`);
+}
+
+(function setupScrubber() {
+  let dragging = false;
+  function onMove(clientX) {
+    const r = heroEl.getBoundingClientRect();
+    setSplit((clientX - r.left) / r.width);
+  }
+  function start(e) {
+    dragging = true;
+    scrubberHandle.classList.add("dragging");
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    onMove(x);
+    e.preventDefault();
+  }
+  function move(e) {
+    if (!dragging) return;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    onMove(x);
+  }
+  function end() {
+    dragging = false;
+    scrubberHandle.classList.remove("dragging");
+  }
+  scrubberHandle.addEventListener("mousedown", (e) => {
+    if (state.editMode) return;
+    start(e);
+  });
+  heroEl.addEventListener("mousedown", (e) => {
+    if (state.editMode) return;
+    // Allow clicking anywhere on the hero to jump the scrubber.
+    if (e.target === heroEl || e.target.tagName === "CANVAS") start(e);
+  });
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", end);
+  scrubberHandle.addEventListener("touchstart", start, { passive: false });
+  window.addEventListener("touchmove", move, { passive: false });
+  window.addEventListener("touchend", end);
+})();
+
+// init split + intensity
+setSplit(1.0);
+heroEl.style.setProperty("--intensity", 1);
+
+// ---------- File input ----------
+[fileFirst, fileInput].forEach(inp => {
+  if (!inp) return;
+  inp.addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (f) loadFromFile(f);
+    inp.value = "";
+  });
+});
+
+// ---------- Drag & drop ----------
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => {
+  if (!e.dataTransfer?.types?.includes("Files")) return;
+  dragDepth++;
+  dragOverlay.classList.add("show");
+});
+window.addEventListener("dragover", (e) => {
+  if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+});
+window.addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) dragOverlay.classList.remove("show");
+});
+window.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  dragOverlay.classList.remove("show");
+  const f = e.dataTransfer?.files?.[0];
+  if (f) loadFromFile(f);
+});
+
+// ---------- Paste ----------
+window.addEventListener("paste", (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.type.startsWith("image/")) {
+      const f = it.getAsFile();
+      if (f) { loadFromFile(f); break; }
+    }
+  }
+});
+
+// ---------- Keyboard ----------
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  if (state.editMode) {
+    if (e.key === "Escape") { exitEditMode(false); e.preventDefault(); }
+    else if (e.key === "Enter") { exitEditMode(true); e.preventDefault(); }
+    return;
+  }
+  const keys = Object.keys(PRESETS);
+  const idx = keys.indexOf(state.active);
+
+  if (e.key === "ArrowRight" && idx >= 0) {
+    setActive(keys[(idx + 1) % keys.length]);
+    e.preventDefault();
+  } else if (e.key === "ArrowLeft" && idx >= 0) {
+    setActive(keys[(idx - 1 + keys.length) % keys.length]);
+    e.preventDefault();
+  } else if (e.key === " " && state.active) {
+    toggleSelected(state.active);
+    e.preventDefault();
+  } else if ((e.key === "a" || e.key === "A") && !e.metaKey && !e.ctrlKey) {
+    selectAllBtn.click();
+    e.preventDefault();
+  } else if (e.key === "Enter" && state.selected.size > 0) {
+    downloadBtn.click();
+    e.preventDefault();
+  }
+});
+
+// ---------- Edit mode (crop / rotate / perspective) ----------
+
+// Largest axis-aligned rectangle that fits inside a rotated WxH rectangle.
+// Used by the rotate tool to auto-crop out the empty triangular corners.
+function inscribedRect(w, h, angleRad) {
+  const a = Math.abs(angleRad) % (Math.PI / 2);
+  const sinA = Math.sin(a), cosA = Math.cos(a);
+  const widthLonger = w >= h;
+  const longSide  = widthLonger ? w : h;
+  const shortSide = widthLonger ? h : w;
+  let wr, hr;
+  if (shortSide <= 2 * sinA * cosA * longSide || Math.abs(sinA - cosA) < 1e-10) {
+    const x = 0.5 * shortSide;
+    wr = widthLonger ? x / sinA : x / cosA;
+    hr = widthLonger ? x / cosA : x / sinA;
+  } else {
+    const cos2A = cosA * cosA - sinA * sinA;
+    wr = (w * cosA - h * sinA) / cos2A;
+    hr = (h * cosA - w * sinA) / cos2A;
+  }
+  return { w: Math.max(1, wr), h: Math.max(1, hr) };
+}
+
+// ---- Crop ----
+function renderCropFrame() {
+  const c = state.editParams.crop;
+  cropFrame.style.left   = (c.x * 100) + "%";
+  cropFrame.style.top    = (c.y * 100) + "%";
+  cropFrame.style.width  = (c.w * 100) + "%";
+  cropFrame.style.height = (c.h * 100) + "%";
+}
+
+function bakeCrop() {
+  const { x, y, w, h } = state.editParams.crop;
+  const src = state.sourceCanvas;
+  const sx = Math.max(0, Math.round(x * src.width));
+  const sy = Math.max(0, Math.round(y * src.height));
+  const sw = Math.max(1, Math.min(src.width  - sx, Math.round(w * src.width)));
+  const sh = Math.max(1, Math.min(src.height - sy, Math.round(h * src.height)));
+  const c = document.createElement("canvas");
+  c.width = sw; c.height = sh;
+  c.getContext("2d").drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+  state.sourceCanvas = c;
+}
+
+(function setupCropDrag() {
+  let drag = null;
+  const MIN = 0.05;
+  cropOverlay.addEventListener("mousedown", (e) => {
+    if (state.editMode !== "crop") return;
+    const handle = e.target.classList.contains("crop-handle")
+      ? e.target.dataset.handle
+      : (e.target === cropFrame ? "move" : null);
+    if (!handle) return;
+    drag = {
+      type: handle,
+      startCrop: { ...state.editParams.crop },
+      startX: e.clientX,
+      startY: e.clientY,
+      rect: heroEl.getBoundingClientRect(),
+    };
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!drag) return;
+    const dx = (e.clientX - drag.startX) / drag.rect.width;
+    const dy = (e.clientY - drag.startY) / drag.rect.height;
+    const s = drag.startCrop;
+    const c = { ...s };
+    if (drag.type === "move") {
+      c.x = Math.max(0, Math.min(1 - c.w, s.x + dx));
+      c.y = Math.max(0, Math.min(1 - c.h, s.y + dy));
+    } else {
+      let x1 = s.x, y1 = s.y, x2 = s.x + s.w, y2 = s.y + s.h;
+      if (drag.type.includes("w")) x1 = Math.max(0, Math.min(x2 - MIN, x1 + dx));
+      if (drag.type.includes("e")) x2 = Math.min(1, Math.max(x1 + MIN, x2 + dx));
+      if (drag.type.includes("n")) y1 = Math.max(0, Math.min(y2 - MIN, y1 + dy));
+      if (drag.type.includes("s")) y2 = Math.min(1, Math.max(y1 + MIN, y2 + dy));
+      c.x = x1; c.y = y1; c.w = x2 - x1; c.h = y2 - y1;
+    }
+    state.editParams.crop = c;
+    renderCropFrame();
+  });
+  window.addEventListener("mouseup", () => { drag = null; });
+})();
+
+// ---- Rotate ----
+function setRotateAngle(a) {
+  if (a > 45) a = 45; else if (a < -45) a = -45;
+  state.editParams.rotate.angle = a;
+  rotateSlider.value  = a;
+  const text = `${a >= 0 ? "+" : ""}${a.toFixed(1)}°`;
+  rotateReadout.textContent = text;
+  rotateBubble.textContent  = text;
+  renderRotatePreview();
+}
+
+function renderRotatePreview() {
+  const angle = state.editParams.rotate.angle * Math.PI / 180;
+  const canvas = heroEditPreview;
+  const w = state.heroW, h = state.heroH;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, w, h);
+  const src = state.sourceCanvas;
+  // Zoom so that the inscribed rect fills the preview frame — matches the
+  // crop that bakeRotate will apply, so the user sees the final result.
+  const ins = inscribedRect(src.width, src.height, angle);
+  const scale = Math.min(w / ins.w, h / ins.h);
+  const dw = src.width  * scale;
+  const dh = src.height * scale;
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate(angle);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(src, -dw / 2, -dh / 2, dw, dh);
+  ctx.restore();
+}
+
+function bakeRotate() {
+  const angleDeg = state.editParams.rotate.angle;
+  if (Math.abs(angleDeg) < 0.01) return;
+  const angle = angleDeg * Math.PI / 180;
+  const src = state.sourceCanvas;
+  const ins = inscribedRect(src.width, src.height, angle);
+  const w = Math.max(1, Math.round(ins.w));
+  const h = Math.max(1, Math.round(ins.h));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate(angle);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  state.sourceCanvas = c;
+}
+
+// Click-and-drag on the image to rotate. 4px = 1° feels Snapseed-ish.
+(function setupRotateDrag() {
+  let drag = null;
+  rotateSurface.addEventListener("mousedown", (e) => {
+    if (state.editMode !== "rotate") return;
+    drag = { startX: e.clientX, startAngle: state.editParams.rotate.angle };
+    rotateSurface.classList.add("dragging");
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.startX;
+    setRotateAngle(drag.startAngle + dx * 0.25);
+  });
+  window.addEventListener("mouseup", () => {
+    if (!drag) return;
+    drag = null;
+    rotateSurface.classList.remove("dragging");
+  });
+})();
+
+// 90° quick rotate — bakes immediately without entering "fine rotate" mode,
+// since the angular slider only spans ±45°.
+async function rotateQuarterTurn(deg) {
+  if (!state.sourceCanvas) return;
+  if (state.editMode) exitEditMode(false);
+  setStatus("Rotating…");
+  await nextFrame();
+  const src = state.sourceCanvas;
+  const c = document.createElement("canvas");
+  c.width  = src.height;
+  c.height = src.width;
+  const ctx = c.getContext("2d");
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate(deg * Math.PI / 180);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  state.sourceCanvas = c;
+  setStatus("");
+  rebuildFromSource();
+  if (state.active) await setActive(state.active);
+}
+
+// ---- Perspective (vertical tilt) ----
+function setPerspectiveAmount(a) {
+  if (a > 0.5) a = 0.5; else if (a < -0.5) a = -0.5;
+  state.editParams.perspective.amount = a;
+  perspectiveSlider.value = Math.round(a * 100);
+  perspectiveReadout.textContent = (a >= 0 ? "+" : "") + Math.round(a * 100);
+  renderPerspectivePreview();
+}
+
+function renderPerspectivePreview() {
+  const amount = state.editParams.perspective.amount;
+  const canvas = heroEditPreview;
+  const w = state.heroW, h = state.heroH;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, w, h);
+  const src = state.sourceCanvas;
+  const fitScale = Math.min(w / src.width, h / src.height);
+  const fitW = src.width  * fitScale;
+  const fitH = src.height * fitScale;
+  const offsetX = (w - fitW) / 2;
+  const offsetY = (h - fitH) / 2;
+  const maxScale = 1 + Math.abs(amount);
+  const baseScale = 1 / maxScale;
+  const strips = 80;
+  for (let i = 0; i < strips; i++) {
+    const t = i / (strips - 1);
+    const sy = i * src.height / strips;
+    const shStrip = src.height / strips + 1;
+    const stripScale = baseScale * (1 + amount * (2 * t - 1));
+    const dw = fitW * stripScale;
+    const dx = offsetX + (fitW - dw) / 2;
+    const dy = offsetY + i * fitH / strips;
+    const dh = fitH / strips + 1;
+    ctx.drawImage(src, 0, sy, src.width, shStrip, dx, dy, dw, dh);
+  }
+}
+
+function bakePerspective() {
+  const amount = state.editParams.perspective.amount;
+  if (Math.abs(amount) < 0.01) return;
+  const src = state.sourceCanvas;
+  const sw = src.width, sh = src.height;
+  const c = document.createElement("canvas");
+  c.width = sw; c.height = sh;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  const maxScale = 1 + Math.abs(amount);
+  const baseScale = 1 / maxScale;
+  const strips = Math.max(150, Math.min(400, Math.round(sh / 4)));
+  for (let i = 0; i < strips; i++) {
+    const t = i / (strips - 1);
+    const sy = i * sh / strips;
+    const shStrip = sh / strips + 1;
+    const stripScale = baseScale * (1 + amount * (2 * t - 1));
+    const dw = sw * stripScale;
+    const dx = (sw - dw) / 2;
+    const dy = i * sh / strips;
+    const dh = sh / strips + 1;
+    ctx.drawImage(src, 0, sy, sw, shStrip, dx, dy, dw, dh);
+  }
+  state.sourceCanvas = c;
+}
+
+// Drag up/down on the image for perspective. ~400px swing = full range.
+(function setupPerspectiveDrag() {
+  let drag = null;
+  perspectiveSurface.addEventListener("mousedown", (e) => {
+    if (state.editMode !== "perspective") return;
+    drag = { startY: e.clientY, startAmount: state.editParams.perspective.amount };
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!drag) return;
+    const dy = e.clientY - drag.startY;
+    setPerspectiveAmount(drag.startAmount + dy * 0.0025);
+  });
+  window.addEventListener("mouseup", () => { drag = null; });
+})();
+
+// ---- Mode switching ----
+function enterEditMode(tool) {
+  if (!state.sourceCanvas) return;
+  if (state.editMode === tool) { exitEditMode(false); return; }
+  if (state.editMode) exitEditMode(false);
+  state.editMode = tool;
+
+  editToolbar.querySelectorAll(".edit-tool").forEach(b => {
+    b.classList.toggle("is-active", b.dataset.tool === tool);
+  });
+  heroEl.classList.add("is-editing", `edit-${tool}`);
+
+  cropPanel.hidden        = tool !== "crop";
+  rotatePanel.hidden      = tool !== "rotate";
+  perspectivePanel.hidden = tool !== "perspective";
+  editPanel.classList.add("show");
+  editPanelLabel.textContent = tool.charAt(0).toUpperCase() + tool.slice(1);
+
+  if (tool === "crop") {
+    state.editParams.crop = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
+    renderCropFrame();
+  } else if (tool === "rotate") {
+    setRotateAngle(0);
+  } else if (tool === "perspective") {
+    setPerspectiveAmount(0);
+  }
+}
+
+async function exitEditMode(apply) {
+  if (!state.editMode) return;
+  const tool = state.editMode;
+  if (apply) {
+    setStatus("Applying…");
+    await nextFrame();
+    try {
+      if (tool === "crop") bakeCrop();
+      else if (tool === "rotate") bakeRotate();
+      else if (tool === "perspective") bakePerspective();
+    } finally {
+      setStatus("");
+    }
+  }
+  state.editMode = null;
+  editToolbar.querySelectorAll(".edit-tool").forEach(b => b.classList.remove("is-active"));
+  heroEl.classList.remove("is-editing", "edit-crop", "edit-rotate", "edit-perspective");
+  editPanel.classList.remove("show");
+  if (apply) {
+    rebuildFromSource();
+    if (state.active) await setActive(state.active);
+  }
+}
+
+// Wire toolbar + panel
+editToolbar.addEventListener("click", (e) => {
+  const btn = e.target.closest(".edit-tool");
+  if (!btn) return;
+  enterEditMode(btn.dataset.tool);
+});
+editApplyBtn.addEventListener("click", () => exitEditMode(true));
+editCancelBtn.addEventListener("click", () => exitEditMode(false));
+rotateSlider.addEventListener("input", () => setRotateAngle(+rotateSlider.value));
+rotate90L.addEventListener("click", () => rotateQuarterTurn(-90));
+rotate90R.addEventListener("click", () => rotateQuarterTurn(90));
+perspectiveSlider.addEventListener("input", () => setPerspectiveAmount(+perspectiveSlider.value / 100));
+
+// ---------- Export ----------
 downloadBtn.addEventListener("click", async () => {
-  if (!sourceImage || selected.size === 0) return;
+  if (!state.sourceCanvas || state.selected.size === 0) return;
   downloadBtn.disabled = true;
-  const total = selected.size;
+  const total = state.selected.size;
   let done = 0;
-  // Render at full resolution to a single source canvas once.
-  const src = document.createElement("canvas");
-  src.width = sourceImage.width; src.height = sourceImage.height;
-  src.getContext("2d").drawImage(sourceImage, 0, 0);
+
+  const src = state.sourceCanvas;
   const srcData = src.getContext("2d").getImageData(0, 0, src.width, src.height);
 
-  for (const name of selected) {
+  for (const name of state.selected) {
     done++;
-    setStatus(`Rendering ${name} (${done}/${total})…`);
+    downloadLabel.textContent = `Rendering ${done}/${total}…`;
     await new Promise(r => setTimeout(r, 0));
     const out = applyPreset(srcData, name, src.width, src.height);
     const c = document.createElement("canvas");
     c.width = src.width; c.height = src.height;
-    c.getContext("2d").putImageData(out, 0, 0);
-    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.95));
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${sourceName}_${name}.jpg`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    const cctx = c.getContext("2d");
+    cctx.putImageData(out, 0, 0);
+
+    // Apply intensity blend if not 100%.
+    if (state.intensity < 1) {
+      const tmp = document.createElement("canvas");
+      tmp.width = src.width; tmp.height = src.height;
+      const tctx = tmp.getContext("2d");
+      tctx.drawImage(src, 0, 0);
+      tctx.globalAlpha = state.intensity;
+      tctx.drawImage(c, 0, 0);
+      tctx.globalAlpha = 1;
+      const blob = await new Promise(r => tmp.toBlob(r, "image/jpeg", 0.95));
+      triggerDownload(blob, `${state.sourceName}_${name}.jpg`);
+    } else {
+      const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.95));
+      triggerDownload(blob, `${state.sourceName}_${name}.jpg`);
+    }
   }
-  setStatus(`Saved ${total}`);
-  downloadBtn.disabled = false;
-  updateDownloadBtn();
+  downloadLabel.textContent = `Exported ${total}`;
+  setTimeout(() => updateSelectionUI(), 1200);
 });
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 </script>
 </body>
 </html>
