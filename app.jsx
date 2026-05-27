@@ -38,7 +38,50 @@ function PhotofilmProvider({ children }) {
   // mode is non-null the hero shows a raw preview of that transform instead
   // of the filtered photo (matches viewer.html's edit-mode UX). applyPending
   // bakes the active transform into sourceCanvas; cancelPending discards it.
-  const [pending, setPending] = React.useState({ mode: null, rotateAngle: 0, perspectiveAmount: 0 });
+  //   "rotate":     ruler-driven angle (existing)
+  //   "perspective": composite of vertical/horizontal keystone, rotate, scale,
+  //                  and x/y offset — all bake together via bakeTransform.
+  //   "crop":       interactive drag-handle crop with FREE aspect.
+  const ZERO_TRANSFORM = { vertical: 0, horizontal: 0, rotateDeg: 0, scale: 0, offsetX: 0, offsetY: 0 };
+  const ZERO_CROP = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
+  const [pending, setPending] = React.useState({
+    mode: null,
+    rotateAngle: 0,
+    perspectiveAmount: 0,
+    transform: { ...ZERO_TRANSFORM },
+    crop: { ...ZERO_CROP },
+  });
+
+  // User adjustments by tab — applied after the active preset in the hero
+  // render. Kept separate from the preset cache so changing a slider doesn't
+  // invalidate the (expensive) preset rendering.
+  const [lightAdjust,   setLightAdjust]   = React.useState(ZERO_LIGHT);
+  const [colorAdjust,   setColorAdjust]   = React.useState(ZERO_COLOR);
+  const [hslAdjust,     setHSLAdjust]     = React.useState(ZERO_HSL);
+  const [curvesAdjust,  setCurvesAdjust]  = React.useState(ZERO_CURVES);
+  const [effectsAdjust, setEffectsAdjust] = React.useState(ZERO_EFFECTS);
+
+  const updateLight   = React.useCallback((key, value) => setLightAdjust  ((p) => ({ ...p, [key]: value })), []);
+  const updateColor   = React.useCallback((key, value) => setColorAdjust  ((p) => ({ ...p, [key]: value })), []);
+  const updateEffects = React.useCallback((key, value) => setEffectsAdjust((p) => ({ ...p, [key]: value })), []);
+  const updateHSL = React.useCallback((colorKey, axis, value) => {
+    setHSLAdjust((p) => ({ ...p, [colorKey]: { ...(p[colorKey] || { h: 0, s: 0, l: 0 }), [axis]: value } }));
+  }, []);
+  const updateCurves = React.useCallback((channel, points) => {
+    setCurvesAdjust((p) => ({ ...p, [channel]: points }));
+  }, []);
+  const resetLight   = React.useCallback(() => setLightAdjust(ZERO_LIGHT),   []);
+  const resetColor   = React.useCallback(() => setColorAdjust(ZERO_COLOR),   []);
+  const resetHSL     = React.useCallback(() => setHSLAdjust(ZERO_HSL),       []);
+  const resetCurves  = React.useCallback(() => setCurvesAdjust(ZERO_CURVES), []);
+  const resetEffects = React.useCallback(() => setEffectsAdjust(ZERO_EFFECTS), []);
+
+  // Composite passed down to FilteredPhoto. Memoized so the effect dep in
+  // FilteredPhoto only fires when an actual slider changes.
+  const userAdjust = React.useMemo(
+    () => ({ light: lightAdjust, color: colorAdjust, hsl: hslAdjust, curves: curvesAdjust, effects: effectsAdjust }),
+    [lightAdjust, colorAdjust, hslAdjust, curvesAdjust, effectsAdjust],
+  );
 
   React.useEffect(() => {
     if (!sourceCanvas) return;
@@ -122,13 +165,35 @@ function PhotofilmProvider({ children }) {
     setPending((p) => ({ ...p, mode: "rotate", rotateAngle: a }));
   }, []);
 
-  const setPendingPerspective = React.useCallback((amt) => {
-    const a = Math.max(-0.5, Math.min(0.5, amt));
-    setPending((p) => ({ ...p, mode: "perspective", perspectiveAmount: a }));
+  // Composite perspective/transform sliders. Vertical+horizontal are keystone
+  // (-0.5..+0.5 normalized), rotate is degrees (-45..+45), scale/offset are
+  // normalized factors; setting any field switches the hero into perspective
+  // preview mode.
+  const setPendingTransform = React.useCallback((key, value) => {
+    setPending((p) => {
+      const next = { ...(p.mode === "perspective" ? p.transform : { vertical: 0, horizontal: 0, rotateDeg: 0, scale: 0, offsetX: 0, offsetY: 0 }) };
+      next[key] = value;
+      // Keep the legacy single-knob field in sync so older callers still work.
+      const perspAmt = next.vertical;
+      return { ...p, mode: "perspective", transform: next, perspectiveAmount: perspAmt };
+    });
+  }, []);
+
+  // Crop overlay: drag handles in TabCrop update this via setPendingCrop.
+  const setPendingCrop = React.useCallback((crop) => {
+    setPending((p) => ({ ...p, mode: "crop", crop }));
+  }, []);
+
+  const startPendingCrop = React.useCallback(() => {
+    setPending((p) => ({ ...p, mode: "crop", crop: p.crop || { x: 0.05, y: 0.05, w: 0.9, h: 0.9 } }));
   }, []);
 
   const cancelPending = React.useCallback(() => {
-    setPending({ mode: null, rotateAngle: 0, perspectiveAmount: 0 });
+    setPending({
+      mode: null, rotateAngle: 0, perspectiveAmount: 0,
+      transform: { vertical: 0, horizontal: 0, rotateDeg: 0, scale: 0, offsetX: 0, offsetY: 0 },
+      crop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
+    });
   }, []);
 
   // Bake whichever pending transform is active. Pure: source → new source.
@@ -137,7 +202,8 @@ function PhotofilmProvider({ children }) {
     setSourceCanvas((prev) => {
       if (!prev) return prev;
       if (pending.mode === "rotate")      return bakeRotate(prev, pending.rotateAngle);
-      if (pending.mode === "perspective") return bakePerspective(prev, pending.perspectiveAmount);
+      if (pending.mode === "perspective") return bakeTransform(prev, pending.transform);
+      if (pending.mode === "crop")        return bakeCrop(prev, pending.crop);
       return prev;
     });
     cancelPending();
@@ -156,7 +222,14 @@ function PhotofilmProvider({ children }) {
     thumbCache: thumbCacheRef.current,
     heroCache:  heroCacheRef.current,
     loadFromFile, applyEdit,
-    pending, setPendingRotate, setPendingPerspective, applyPending, cancelPending,
+    pending, setPendingRotate, setPendingTransform, setPendingCrop, startPendingCrop,
+    applyPending, cancelPending,
+    lightAdjust,   updateLight,   resetLight,
+    colorAdjust,   updateColor,   resetColor,
+    hslAdjust,     updateHSL,     resetHSL,
+    curvesAdjust,  updateCurves,  resetCurves,
+    effectsAdjust, updateEffects, resetEffects,
+    userAdjust,
   };
   return <PhotofilmContext.Provider value={value}>{children}</PhotofilmContext.Provider>;
 }
@@ -188,6 +261,7 @@ function Darkroom({ tweaks }) {
     status, compare, setCompare,
     thumb, hero, thumbCache, heroCache,
     loadFromFile, cacheGen, pending,
+    userAdjust, setPendingCrop,
   } = ph;
 
   const active = PRESETS[activePreset] || PRESETS_LIST[0];
@@ -279,10 +353,11 @@ function Darkroom({ tweaks }) {
         }}>
           {/* photo viewport */}
           <div style={{ flex: 1, position: "relative", padding: "24px 28px", minHeight: 0, display: "flex", alignItems: "stretch", justifyContent: "center" }}>
-            {hero && pending.mode ? (
+            {hero && pending.mode && activeTab === "geo" ? (
               <EditPreview
                 sourceCanvas={sourceCanvas}
                 pending={pending}
+                onCropChange={setPendingCrop}
                 style={{
                   width: "100%", height: "100%",
                   borderRadius: 2,
@@ -297,6 +372,7 @@ function Darkroom({ tweaks }) {
                 cache={heroCache}
                 presetId={activePreset}
                 intensity={renderedIntensity}
+                userAdjust={userAdjust}
                 key={`hero-${cacheGen}`}
                 style={{
                   width: "100%", height: "100%",
@@ -502,12 +578,13 @@ function renderTabBody(activeTab, ctx) {
 
 // ─── EditPreview ──────────────────────────────────────────────────────────
 // Renders an unfiltered preview of the source canvas with the active pending
-// transform applied. Used while the user is dragging the straighten ruler or
-// the perspective slider, before they commit via Apply.
-function EditPreview({ sourceCanvas, pending, style }) {
+// transform applied. Used while the user is dragging the straighten ruler,
+// any perspective slider, or the interactive crop handles.
+function EditPreview({ sourceCanvas, pending, onCropChange, style }) {
   const wrapRef = React.useRef(null);
   const canvasRef = React.useRef(null);
   const [size, setSize] = React.useState({ w: 0, h: 0 });
+  const [fitRect, setFitRect] = React.useState(null);  // photo-in-viewport rect for crop overlay
 
   // Track the wrapper's on-screen size so the preview canvas matches it.
   React.useEffect(() => {
@@ -544,33 +621,124 @@ function EditPreview({ sourceCanvas, pending, style }) {
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(sourceCanvas, -dw / 2, -dh / 2, dw, dh);
       ctx.restore();
+      setFitRect(null);
     } else if (pending.mode === "perspective") {
-      const amount = pending.perspectiveAmount;
+      // Live preview of the composite transform. Bake to a temp canvas of
+      // the source size, then draw fit-to-viewport.
+      const baked = bakeTransform(sourceCanvas, pending.transform || {
+        vertical: pending.perspectiveAmount || 0,
+        horizontal: 0, rotateDeg: 0, scale: 0, offsetX: 0, offsetY: 0,
+      });
+      const fitScale = Math.min(size.w / baked.width, size.h / baked.height);
+      const fitW = baked.width  * fitScale;
+      const fitH = baked.height * fitScale;
+      const offsetX = (size.w - fitW) / 2;
+      const offsetY = (size.h - fitH) / 2;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(baked, offsetX, offsetY, fitW, fitH);
+      setFitRect(null);
+    } else if (pending.mode === "crop") {
+      // For crop: draw the (unfiltered) source full-size and surface the
+      // photo rect so the overlay knows where the handles sit.
       const fitScale = Math.min(size.w / sourceCanvas.width, size.h / sourceCanvas.height);
       const fitW = sourceCanvas.width  * fitScale;
       const fitH = sourceCanvas.height * fitScale;
-      const offsetX = (size.w - fitW) / 2;
-      const offsetY = (size.h - fitH) / 2;
-      const maxScale = 1 + Math.abs(amount);
-      const baseScale = 1 / maxScale;
-      const strips = 80;
-      for (let i = 0; i < strips; i++) {
-        const t = i / (strips - 1);
-        const sy = i * sourceCanvas.height / strips;
-        const shStrip = sourceCanvas.height / strips + 1;
-        const stripScale = baseScale * (1 + amount * (2 * t - 1));
-        const dw = fitW * stripScale;
-        const dx = offsetX + (fitW - dw) / 2;
-        const dy = offsetY + i * fitH / strips;
-        const dh = fitH / strips + 1;
-        ctx.drawImage(sourceCanvas, 0, sy, sourceCanvas.width, shStrip, dx, dy, dw, dh);
-      }
+      const ox = (size.w - fitW) / 2;
+      const oy = (size.h - fitH) / 2;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(sourceCanvas, ox, oy, fitW, fitH);
+      setFitRect({ x: ox, y: oy, w: fitW, h: fitH });
     }
   }, [sourceCanvas, pending, size]);
 
   return (
     <div ref={wrapRef} style={{ ...style, position: "relative", background: "#000" }}>
       <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
+      {pending.mode === "crop" && fitRect && onCropChange && (
+        <CropOverlay rect={fitRect} crop={pending.crop} onChange={onCropChange} />
+      )}
+    </div>
+  );
+}
+
+// ─── CropOverlay ──────────────────────────────────────────────────────────
+// Eight-handle drag-to-resize + drag-to-move crop frame. `rect` is the photo
+// rect inside the wrapper in pixels; `crop` is the normalized {x,y,w,h} of
+// the crop within the source. onChange is called with the new normalized
+// crop on every drag tick.
+function CropOverlay({ rect, crop, onChange }) {
+  const MIN = 0.05;
+  const startDrag = React.useCallback((e, handle) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX, startY = e.clientY;
+    const start = { ...crop };
+    const move = (ev) => {
+      const dx = (ev.clientX - startX) / rect.w;
+      const dy = (ev.clientY - startY) / rect.h;
+      let next = { ...start };
+      if (handle === "move") {
+        next.x = Math.max(0, Math.min(1 - start.w, start.x + dx));
+        next.y = Math.max(0, Math.min(1 - start.h, start.y + dy));
+      } else {
+        let x1 = start.x, y1 = start.y, x2 = start.x + start.w, y2 = start.y + start.h;
+        if (handle.includes("w")) x1 = Math.max(0, Math.min(x2 - MIN, x1 + dx));
+        if (handle.includes("e")) x2 = Math.min(1, Math.max(x1 + MIN, x2 + dx));
+        if (handle.includes("n")) y1 = Math.max(0, Math.min(y2 - MIN, y1 + dy));
+        if (handle.includes("s")) y2 = Math.min(1, Math.max(y1 + MIN, y2 + dy));
+        next = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+      }
+      onChange(next);
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }, [rect, crop, onChange]);
+
+  const frameStyle = {
+    position: "absolute",
+    left:   rect.x + crop.x * rect.w,
+    top:    rect.y + crop.y * rect.h,
+    width:  crop.w * rect.w,
+    height: crop.h * rect.h,
+    border: "1px solid rgba(255,255,255,0.85)",
+    boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)",
+    cursor: "move",
+  };
+
+  // Rule-of-thirds grid + 8 handles. Handle positions are relative to frame.
+  const HANDLES = [
+    { k: "nw", style: { top: -6, left: -6, cursor: "nwse-resize" } },
+    { k: "n",  style: { top: -6, left: "50%", marginLeft: -6, cursor: "ns-resize" } },
+    { k: "ne", style: { top: -6, right: -6, cursor: "nesw-resize" } },
+    { k: "e",  style: { top: "50%", right: -6, marginTop: -6, cursor: "ew-resize" } },
+    { k: "se", style: { bottom: -6, right: -6, cursor: "nwse-resize" } },
+    { k: "s",  style: { bottom: -6, left: "50%", marginLeft: -6, cursor: "ns-resize" } },
+    { k: "sw", style: { bottom: -6, left: -6, cursor: "nesw-resize" } },
+    { k: "w",  style: { top: "50%", left: -6, marginTop: -6, cursor: "ew-resize" } },
+  ];
+  return (
+    <div style={frameStyle} onMouseDown={(e) => startDrag(e, "move")}>
+      {/* thirds grid */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        <div style={{ position: "absolute", left: "33.33%", top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.25)" }} />
+        <div style={{ position: "absolute", left: "66.66%", top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.25)" }} />
+        <div style={{ position: "absolute", top: "33.33%", left: 0, right: 0, height: 1, background: "rgba(255,255,255,0.25)" }} />
+        <div style={{ position: "absolute", top: "66.66%", left: 0, right: 0, height: 1, background: "rgba(255,255,255,0.25)" }} />
+      </div>
+      {HANDLES.map((h) => (
+        <div
+          key={h.k}
+          onMouseDown={(e) => startDrag(e, h.k)}
+          style={{
+            position: "absolute", width: 12, height: 12, background: "#fff",
+            border: "1px solid rgba(0,0,0,0.4)", borderRadius: 1, ...h.style,
+          }}
+        />
+      ))}
     </div>
   );
 }
