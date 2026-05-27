@@ -241,6 +241,102 @@ function opMonochrome(buf, n, { red = 0.3, green = 0.5, blue = 0.2 }) {
   }
 }
 
+// ---------- Light-panel ops (user adjustments) ----------------------------
+// These run after the preset, sourced from the Light tab. Sliders pass
+// integer slider units; the ops scale them into pleasant ranges.
+
+function opExposure(buf, { ev }) {
+  if (!ev) return;
+  const k = Math.pow(2, ev);
+  for (let i = 0; i < buf.length; i++) buf[i] *= k;
+}
+
+// Combined highlights/shadows/whites/blacks. All inputs in [-1, +1].
+// Positive = brighter in that tonal region (matches Lightroom).
+function opLightTone(buf, n, { highlights = 0, shadows = 0, whites = 0, blacks = 0 }) {
+  if (!highlights && !shadows && !whites && !blacks) return;
+  const hAmt = highlights * 0.35;
+  const sAmt = shadows    * 0.35;
+  const wAmt = whites     * 0.30;
+  const bAmt = blacks     * 0.30;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const luma = 0.2126 * buf[idx] + 0.7152 * buf[idx + 1] + 0.0722 * buf[idx + 2];
+    // Soft masks ramped against luma; smoothstep keeps transitions painless.
+    const tH = Math.max(0, (luma - 0.5)  * 2.0);  // 0 at 0.5 → 1 at 1.0
+    const tS = Math.max(0, (0.5  - luma) * 2.0);  // 0 at 0.5 → 1 at 0.0
+    const tW = Math.max(0, (luma - 0.7)  / 0.3);  // 0 at 0.7 → 1 at 1.0
+    const tB = Math.max(0, (0.3  - luma) / 0.3);  // 0 at 0.3 → 1 at 0.0
+    const mH = tH * tH * (3 - 2 * tH);
+    const mS = tS * tS * (3 - 2 * tS);
+    const mW = tW * tW * (3 - 2 * tW);
+    const mB = tB * tB * (3 - 2 * tB);
+    const delta = hAmt * mH + sAmt * mS + wAmt * mW + bAmt * mB;
+    buf[idx]     += delta;
+    buf[idx + 1] += delta;
+    buf[idx + 2] += delta;
+  }
+}
+
+// Unsharp mask: detail = original - blurred; output = original + amount*detail.
+// texture/clarity/dehaze in the Light panel all funnel through here with
+// different radii. amount=0 short-circuits — blur is the expensive step.
+function opUnsharp(buf, n, width, height, { amount, radius }) {
+  if (!amount || radius <= 0) return;
+  const tmp = new ImageData(width, height);
+  floatToImageData(buf, tmp);
+  const src = document.createElement("canvas");
+  src.width = width; src.height = height;
+  src.getContext("2d").putImageData(tmp, 0, 0);
+  const dst = document.createElement("canvas");
+  dst.width = width; dst.height = height;
+  const dctx = dst.getContext("2d");
+  dctx.filter = `blur(${radius}px)`;
+  dctx.drawImage(src, 0, 0);
+  const blurred = dctx.getImageData(0, 0, width, height).data;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3, j = i * 4;
+    buf[idx]     += amount * (buf[idx]     - blurred[j]     / 255);
+    buf[idx + 1] += amount * (buf[idx + 1] - blurred[j + 1] / 255);
+    buf[idx + 2] += amount * (buf[idx + 2] - blurred[j + 2] / 255);
+  }
+}
+
+// Light-panel adjustments. Stored in slider units (see ZERO_LIGHT).
+const ZERO_LIGHT = {
+  exposure: 0, contrast: 0,
+  highlights: 0, shadows: 0, whites: 0, blacks: 0,
+  texture: 0, clarity: 0, dehaze: 0,
+};
+
+function isLightAdjustActive(a) {
+  if (!a) return false;
+  for (const k in ZERO_LIGHT) if (a[k]) return true;
+  return false;
+}
+
+function applyLightAdjust(imageData, width, height, a) {
+  if (!isLightAdjustActive(a)) return imageData;
+  const out = new ImageData(new Uint8ClampedArray(imageData.data), width, height);
+  const buf = imageDataToFloat(out);
+  const n = width * height;
+  // exposure stored as tenths of an EV (slider int −50..+50 → −5..+5 EV).
+  opExposure(buf, { ev: a.exposure / 10 });
+  opContrast(buf, n, { amount: a.contrast / 100 });
+  opLightTone(buf, n, {
+    highlights: a.highlights / 100,
+    shadows:    a.shadows    / 100,
+    whites:     a.whites     / 100,
+    blacks:     a.blacks     / 100,
+  });
+  // Radius tuned per slider: texture = fine detail; clarity = mid-tones; dehaze = haze halo.
+  if (a.texture) opUnsharp(buf, n, width, height, { amount: a.texture / 100, radius: 2  });
+  if (a.clarity) opUnsharp(buf, n, width, height, { amount: a.clarity / 100, radius: 15 });
+  if (a.dehaze)  opUnsharp(buf, n, width, height, { amount: a.dehaze  / 100, radius: 45 });
+  floatToImageData(buf, out);
+  return out;
+}
+
 function opBloom(buf, n, width, height, { threshold = 0.6, blur_radius = 20.0, amount = 0.5 }) {
   if (amount <= 0) return;
   const denom = Math.max(1e-3, 1.0 - threshold);
@@ -642,7 +738,7 @@ function Histogram({ imageData, width = 180, height = 48 }) {
 // ---------- Slider: visual only — the design uses these for many controls.
 // Values are display-only; the controlled ones (strength, rotate, perspective)
 // have their own purpose-built sliders in the relevant tabs. ---------------
-function Slider({ label, value, unit = "", min = -100, max = 100, color = "#fff", trackBg = "rgba(255,255,255,0.08)", labelStyle = {}, valueStyle = {}, onChange }) {
+function Slider({ label, value, unit = "", min = -100, max = 100, color = "#fff", trackBg = "rgba(255,255,255,0.08)", labelStyle = {}, valueStyle = {}, onChange, format }) {
   const trackRef = React.useRef(null);
   const pct = ((value - min) / (max - min)) * 100;
   const mid = ((0 - min) / (max - min)) * 100;
@@ -673,7 +769,7 @@ function Slider({ label, value, unit = "", min = -100, max = 100, color = "#fff"
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, ...labelStyle }}>
         <span>{label}</span>
         <span style={{ fontVariantNumeric: "tabular-nums", opacity: 0.7, ...valueStyle }}>
-          {value > 0 ? "+" : ""}{value}{unit}
+          {format ? format(value) : `${value > 0 ? "+" : ""}${value}${unit}`}
         </span>
       </div>
       <div
@@ -703,7 +799,7 @@ function Slider({ label, value, unit = "", min = -100, max = 100, color = "#fff"
 // UI elements that don't have a sourceCanvas yet). Memoizes via a per-photo
 // cache keyed by presetId so the same thumb isn't recomputed on every render.
 // --------------------------------------------------------------------------
-function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensity = 1, style = {}, className = "", objectFit = "contain", fallbackUrl = DEMO_PHOTO, fallbackFilter = "" }) {
+function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensity = 1, lightAdjust, style = {}, className = "", objectFit = "contain", fallbackUrl = DEMO_PHOTO, fallbackFilter = "" }) {
   const canvasRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -719,13 +815,17 @@ function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensit
         if (cache) cache.set(presetId, filtered);
       }
       if (cancelled) return;
+      // Apply user adjustments on top — never mutate the cached preset output.
+      const display = isLightAdjustActive(lightAdjust)
+        ? applyLightAdjust(filtered, sourceW, sourceH, lightAdjust)
+        : filtered;
       const canvas = canvasRef.current;
       if (!canvas) return;
       canvas.width = sourceW; canvas.height = sourceH;
-      canvas.getContext("2d").putImageData(filtered, 0, 0);
+      canvas.getContext("2d").putImageData(display, 0, 0);
     });
     return () => { cancelled = true; };
-  }, [sourceData, sourceW, sourceH, presetId, cache]);
+  }, [sourceData, sourceW, sourceH, presetId, cache, lightAdjust]);
 
   // object-fit on a <canvas> uses the canvas's bitmap as the "object" and the
   // CSS box as the "container" — `contain` preserves aspect on the hero, and
@@ -780,6 +880,8 @@ Object.assign(window, {
   applyPreset, imageDataToFloat, floatToImageData,
   opToneCurve, opWhiteBalance, opSaturation, opChannelSaturation,
   opContrast, opGrain, opMonochrome, opBloom,
+  opExposure, opLightTone, opUnsharp,
+  applyLightAdjust, isLightAdjustActive, ZERO_LIGHT,
   // loaders
   isLoadableImage, loadImageFromBlob, loadOrientedCanvas,
   extractEmbeddedJpeg, downscaleToImageData,

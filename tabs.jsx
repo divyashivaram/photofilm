@@ -27,7 +27,7 @@ function SectionHeader({ children, mono, muted, accent, right, onRight }) {
   );
 }
 
-function TabSlider({ label, value, unit = "", min = -100, max = 100, ctx, onChange }) {
+function TabSlider({ label, value, unit = "", min = -100, max = 100, ctx, onChange, format }) {
   return (
     <Slider
       label={label} value={value} unit={unit} min={min} max={max}
@@ -35,29 +35,39 @@ function TabSlider({ label, value, unit = "", min = -100, max = 100, ctx, onChan
       labelStyle={{ color: ctx.text, fontSize: 11.5 }}
       valueStyle={{ fontFamily: ctx.mono, fontSize: 10.5 }}
       onChange={onChange}
+      format={format}
     />
   );
 }
 
-// ─── LIGHT (stub) ─────────────────────────────────────────────────────────
+// ─── LIGHT (functional) ───────────────────────────────────────────────────
+// Sliders write into PhotofilmContext.lightAdjust; the hero FilteredPhoto
+// re-runs applyLightAdjust on top of the cached preset output each time a
+// value changes. Slider units match what the pipeline expects (exposure in
+// tenths of an EV, everything else in [-100, +100]).
 function TabLight({ ctx }) {
+  const { lightAdjust, updateLight } = usePhotofilm();
+  const L = lightAdjust || ZERO_LIGHT;
+  const fmtEV = (v) => `${v > 0 ? "+" : ""}${(v / 10).toFixed(1)} EV`;
+  const resetKeys = (keys) => keys.forEach((k) => updateLight(k, 0));
   return (
     <div style={{ overflow: "hidden" }}>
-      <StubBanner ctx={ctx} message="Visual preview — wiring TODO" />
-      <SectionHeader mono={ctx.mono} muted={ctx.muted} accent={ctx.accent}>TONE</SectionHeader>
+      <SectionHeader mono={ctx.mono} muted={ctx.muted} accent={ctx.accent}
+        onRight={() => resetKeys(["exposure", "contrast", "highlights", "shadows", "whites", "blacks"])}>TONE</SectionHeader>
       <div style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 18 }}>
-        <TabSlider label="Exposure"   value={+0.3} unit=" EV" min={-5} max={5} ctx={ctx} />
-        <TabSlider label="Contrast"   value={+12}  ctx={ctx} />
-        <TabSlider label="Highlights" value={-32}  ctx={ctx} />
-        <TabSlider label="Shadows"    value={+24}  ctx={ctx} />
-        <TabSlider label="Whites"     value={+8}   ctx={ctx} />
-        <TabSlider label="Blacks"     value={-14}  ctx={ctx} />
+        <TabSlider label="Exposure"   value={L.exposure}   min={-50} max={50} ctx={ctx} format={fmtEV} onChange={(v) => updateLight("exposure", v)} />
+        <TabSlider label="Contrast"   value={L.contrast}   ctx={ctx} onChange={(v) => updateLight("contrast", v)} />
+        <TabSlider label="Highlights" value={L.highlights} ctx={ctx} onChange={(v) => updateLight("highlights", v)} />
+        <TabSlider label="Shadows"    value={L.shadows}    ctx={ctx} onChange={(v) => updateLight("shadows", v)} />
+        <TabSlider label="Whites"     value={L.whites}     ctx={ctx} onChange={(v) => updateLight("whites", v)} />
+        <TabSlider label="Blacks"     value={L.blacks}     ctx={ctx} onChange={(v) => updateLight("blacks", v)} />
       </div>
-      <SectionHeader mono={ctx.mono} muted={ctx.muted} accent={ctx.accent}>PRESENCE</SectionHeader>
+      <SectionHeader mono={ctx.mono} muted={ctx.muted} accent={ctx.accent}
+        onRight={() => resetKeys(["texture", "clarity", "dehaze"])}>PRESENCE</SectionHeader>
       <div style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 18 }}>
-        <TabSlider label="Texture" value={+15} ctx={ctx} />
-        <TabSlider label="Clarity" value={+8}  ctx={ctx} />
-        <TabSlider label="Dehaze"  value={0}   ctx={ctx} />
+        <TabSlider label="Texture" value={L.texture} ctx={ctx} onChange={(v) => updateLight("texture", v)} />
+        <TabSlider label="Clarity" value={L.clarity} ctx={ctx} onChange={(v) => updateLight("clarity", v)} />
+        <TabSlider label="Dehaze"  value={L.dehaze}  ctx={ctx} onChange={(v) => updateLight("dehaze",  v)} />
       </div>
     </div>
   );

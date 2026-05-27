@@ -31,6 +31,14 @@ they need via `usePhotofilm()`.
 ## What's functional vs. stub
 
 ### Functional (real pipeline)
+- **Light tab** — Exposure, Contrast, Highlights, Shadows, Whites, Blacks,
+  Texture, Clarity, Dehaze. Sliders write into `lightAdjust` state in the
+  provider; the hero `FilteredPhoto` runs `applyLightAdjust` on top of the
+  cached preset output, so changing a slider re-renders without invalidating
+  the (expensive) preset cache. Tone adjustments use luma-masked offsets;
+  texture/clarity/dehaze use unsharp mask with progressively larger blur
+  radii. Per-section RESET buttons in the section headers. Browser-only — the
+  CLI doesn't expose these yet.
 - **Film strip** — clicking a thumbnail sets the active preset; the hero
   re-renders with that preset applied. Eight built-in presets match the CLI.
 - **Strength slider** — 0–100 % intensity blend between original and filtered.
@@ -54,8 +62,6 @@ they need via `usePhotofilm()`.
   is checked.
 
 ### Stub (visual only — TODOs below)
-- **Light tab** — Exposure / Contrast / Highlights / Shadows / Whites /
-  Blacks / Texture / Clarity / Dehaze sliders. None apply.
 - **Color tab** — White-balance presets, Temperature/Tint sliders, Vibrance/
   Saturation, Split-toning hue/sat cards.
 - **HSL tab** — 8-color × (Hue, Saturation, Luminance) mixer.
@@ -84,11 +90,12 @@ they need via `usePhotofilm()`.
    Surface it as a user adjustment layer that runs after the preset.
 4. **Color → Vibrance/Saturation** — `opSaturation` exists; wire user-driven
    amount.
-5. **Light → Exposure** — straightforward gain in linear space. Add op.
-6. **Light → Contrast** — `opContrast` exists.
-7. **HSL** — requires per-color hue-shift logic; can be approximated by
+5. **HSL** — requires per-color hue-shift logic; can be approximated by
    converting RGB → HSL, applying selective adjustments by hue range,
    converting back.
+6. **CLI parity for Light** — `applyLightAdjust` exists only in the browser
+   pipeline. Port the same ops (exposure / lightTone / unsharp) into
+   `photofilm/filters.py` so the CLI can take `--exposure`, `--clarity` etc.
 
 ### Bigger lifts
 8. **LUT tab — browser `.cube` loader** — parse `.cube` files (1D + 3D) and
@@ -101,12 +108,6 @@ they need via `usePhotofilm()`.
 11. **Crop tab — Perspective Horizontal** — extend `bakePerspective` /
     `opPerspective` to support horizontal keystone (strip-scaling along the
     other axis).
-12. **Light → Highlights/Shadows/Whites/Blacks** — local tone adjustment; non-
-    trivial without a proper local-contrast op. Probably do this as parametric
-    curve points feeding `opToneCurve`.
-13. **Light → Texture/Clarity/Dehaze** — needs local contrast / detail
-    extraction; mid-frequency unsharp mask for clarity, larger-radius for
-    dehaze. Probably WebGL or worker territory if performance matters.
 
 ## Approach for new pipeline ops
 

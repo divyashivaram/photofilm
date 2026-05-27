@@ -40,6 +40,15 @@ function PhotofilmProvider({ children }) {
   // bakes the active transform into sourceCanvas; cancelPending discards it.
   const [pending, setPending] = React.useState({ mode: null, rotateAngle: 0, perspectiveAmount: 0 });
 
+  // Light-tab user adjustments, applied after the active preset in the hero
+  // render. Kept separate from the preset cache so changing a slider doesn't
+  // invalidate the (expensive) preset rendering.
+  const [lightAdjust, setLightAdjust] = React.useState(ZERO_LIGHT);
+  const updateLight = React.useCallback((key, value) => {
+    setLightAdjust((p) => ({ ...p, [key]: value }));
+  }, []);
+  const resetLight = React.useCallback(() => setLightAdjust(ZERO_LIGHT), []);
+
   React.useEffect(() => {
     if (!sourceCanvas) return;
     const t = downscaleToImageData(sourceCanvas, THUMB_MAX);
@@ -157,6 +166,7 @@ function PhotofilmProvider({ children }) {
     heroCache:  heroCacheRef.current,
     loadFromFile, applyEdit,
     pending, setPendingRotate, setPendingPerspective, applyPending, cancelPending,
+    lightAdjust, updateLight, resetLight,
   };
   return <PhotofilmContext.Provider value={value}>{children}</PhotofilmContext.Provider>;
 }
@@ -188,6 +198,7 @@ function Darkroom({ tweaks }) {
     status, compare, setCompare,
     thumb, hero, thumbCache, heroCache,
     loadFromFile, cacheGen, pending,
+    lightAdjust,
   } = ph;
 
   const active = PRESETS[activePreset] || PRESETS_LIST[0];
@@ -297,6 +308,7 @@ function Darkroom({ tweaks }) {
                 cache={heroCache}
                 presetId={activePreset}
                 intensity={renderedIntensity}
+                lightAdjust={lightAdjust}
                 key={`hero-${cacheGen}`}
                 style={{
                   width: "100%", height: "100%",
