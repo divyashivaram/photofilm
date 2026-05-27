@@ -31,14 +31,34 @@ they need via `usePhotofilm()`.
 ## What's functional vs. stub
 
 ### Functional (real pipeline)
+All user adjustments compose into a single `userAdjust = {light, color, hsl,
+curves, effects}` object held in `PhotofilmContext`. The hero `FilteredPhoto`
+runs `applyUserAdjustments` on top of the cached preset output, so changing
+any slider re-renders without invalidating the (expensive) preset cache.
+
 - **Light tab** — Exposure, Contrast, Highlights, Shadows, Whites, Blacks,
-  Texture, Clarity, Dehaze. Sliders write into `lightAdjust` state in the
-  provider; the hero `FilteredPhoto` runs `applyLightAdjust` on top of the
-  cached preset output, so changing a slider re-renders without invalidating
-  the (expensive) preset cache. Tone adjustments use luma-masked offsets;
+  Texture, Clarity, Dehaze. Tone adjustments use luma-masked offsets;
   texture/clarity/dehaze use unsharp mask with progressively larger blur
-  radii. Per-section RESET buttons in the section headers. Browser-only — the
-  CLI doesn't expose these yet.
+  radii. Browser-only — the CLI doesn't expose these yet.
+- **Color tab** — White-balance Kelvin-style Temperature + Tint sliders, WB
+  preset pills (As Shot / Daylight / Cloudy / Shade / Tungsten / Fluorescent
+  / Flash), Vibrance, Saturation, and Split Toning (two ToneCards for shadow
+  + highlight H/S, Balance slider). Drives `opWhiteBalance`, `opVibrance`,
+  `opSaturation`, `opSplitTone`.
+- **HSL tab** — 8-color (Red/Orange/Yellow/Green/Aqua/Blue/Purple/Magenta) ×
+  (Hue, Saturation, Luminance) mixer. ALL/HUE/SAT/LUM filter pills dim the
+  inactive columns. Drives `opHSL`, which converts each pixel to HSL once
+  and weights contributions by hue distance (smoothstep, ±60° half-width).
+- **Curves tab** — Per-channel point-curve editor (RGB / R / G / B). Click
+  the graph to add a point, drag to move (clamped between neighbors), shift-
+  click a point to delete. IN/OUT readouts show the selected point's source/
+  target value in 0–255. Six built-in presets (Linear / Medium Contrast /
+  Strong Contrast / Filmic / Crushed Blacks / Lifted Shadows). Drives
+  `opToneCurve` per channel.
+- **Effects tab** — Grain (Amount / Size / Roughness), Vignette (Amount /
+  Midpoint / Roundness / Feather, negative=darken corners), Sharpen
+  (Amount / Radius / Detail / Masking, with edge-aware masking gate). Drives
+  `opGrain`, `opVignette`, `opSharpen`.
 - **Film strip** — clicking a thumbnail sets the active preset; the hero
   re-renders with that preset applied. Eight built-in presets match the CLI.
 - **Strength slider** — 0–100 % intensity blend between original and filtered.
@@ -46,14 +66,20 @@ they need via `usePhotofilm()`.
 - **EXIF chip** — real source dimensions + active preset + intensity.
 - **Open / drag-drop / paste** — supports JPEG/PNG/WebP/HEIC + RAW (CR2/NEF/
   ARW/DNG/RAF/etc) by extracting the embedded JPEG preview.
-- **Crop tab — Aspect** — 1:1, 4:5, 5:4, 3:2, 2:3, 16:9, 9:16 buttons apply a
-  centered crop immediately.
+- **Crop tab — Aspect** — ORIGINAL (cancel pending), FREE (interactive
+  overlay), 1:1, 4:5, 5:4, 3:2, 2:3, 16:9, 9:16 buttons. Aspect buttons apply
+  a centered crop immediately; FREE puts the user into crop-pending mode
+  with a draggable 8-handle frame + rule-of-thirds grid drawn over the hero
+  in `EditPreview` / `CropOverlay`. Apply bakes via `bakeCrop`.
 - **Crop tab — 90° rotate / flip H/V** — instant.
-- **Crop tab — Straighten** — ruler controls a pending rotation angle (-45° to
-  +45°); hero shows a live raw preview with the inscribed crop applied; Apply
-  button bakes it into `sourceCanvas`.
-- **Crop tab — Perspective Vertical** — slider controls a pending keystone
-  amount (-0.5 to +0.5); hero shows a live raw preview; Apply bakes.
+- **Crop tab — Straighten** — ruler controls a pending rotation angle (-45°
+  to +45°); hero shows a live raw preview with the inscribed crop applied;
+  Apply bakes via `bakeRotate`.
+- **Crop tab — Perspective** — all six sliders (Vertical/Horizontal keystone,
+  Rotate, Scale, X-Offset, Y-Offset) feed a single composite pending
+  transform that previews live in the hero and bakes together via
+  `bakeTransform`. Vertical+horizontal use the same strip-warp approach;
+  rotate/scale/offset run as a final affine.
 - **Hold to compare** — temporarily renders intensity = 0.
 - **Keyboard** — ←/→ step presets; Space toggles active preset in export set.
 - **Export tab** — JPEG/PNG/WebP, quality slider, optional long-edge cap
@@ -62,52 +88,39 @@ they need via `usePhotofilm()`.
   is checked.
 
 ### Stub (visual only — TODOs below)
-- **Color tab** — White-balance presets, Temperature/Tint sliders, Vibrance/
-  Saturation, Split-toning hue/sat cards.
-- **HSL tab** — 8-color × (Hue, Saturation, Luminance) mixer.
-- **Curves tab** — RGB / per-channel curve editor + curve presets.
-- **Effects tab** — Grain, Vignette, Sharpen, Noise reduction. Note: grain is
-  partially exposed via the per-preset `grain` op, but there's no standalone
-  user-facing control yet.
 - **LUT tab** — `.cube` drop zone, intensity, shelf. The CLI supports `--lut
   path/to/x.cube` (see `photofilm/lut.py`); the browser doesn't load `.cube`
   files yet.
-- **Crop tab — FREE aspect / ORIGINAL** — placeholder buttons; need an
-  interactive crop overlay with draggable handles.
-- **Crop tab — Perspective Horizontal / Rotate / Scale / X-Offset / Y-Offset
-  sliders** — visual only. Pipeline only supports the vertical keystone.
 
 ## TODOs to make the stubs real
 
-### High-value, partly-supported by CLI pipeline
-1. **Effects → Grain** — `opGrain` already exists in `pipeline.jsx`. Add a
-   user-controlled grain amount that's applied *after* the preset's own
-   grain, and wire it to the slider.
-2. **Effects → Vignette** — not in pipeline. Add `opVignette({amount,
-   midpoint, roundness, feather})` to both `pipeline.jsx` (browser) and
-   `photofilm/filters.py` (CLI). Simple radial mask.
-3. **Color → White balance** — `opWhiteBalance({temp, tint})` already exists.
-   Surface it as a user adjustment layer that runs after the preset.
-4. **Color → Vibrance/Saturation** — `opSaturation` exists; wire user-driven
-   amount.
-5. **HSL** — requires per-color hue-shift logic; can be approximated by
-   converting RGB → HSL, applying selective adjustments by hue range,
-   converting back.
-6. **CLI parity for Light** — `applyLightAdjust` exists only in the browser
-   pipeline. Port the same ops (exposure / lightTone / unsharp) into
-   `photofilm/filters.py` so the CLI can take `--exposure`, `--clarity` etc.
-
-### Bigger lifts
-8. **LUT tab — browser `.cube` loader** — parse `.cube` files (1D + 3D) and
+1. **LUT tab — browser `.cube` loader** — parse `.cube` files (1D + 3D) and
    apply a 3D LUT via trilinear interpolation. Mirror `photofilm/lut.py`.
-9. **Curves tab — interactive curve editor** — pipeline `opToneCurve` already
-   exists. Need draggable point editor + per-channel switching.
-10. **Crop tab — interactive crop overlay** — port the draggable handles +
-    rule-of-thirds grid from `viewer.html` (lines 2053-2093). Hook to a
-    pending `crop: {x,y,w,h}` in the provider so Apply bakes it.
-11. **Crop tab — Perspective Horizontal** — extend `bakePerspective` /
-    `opPerspective` to support horizontal keystone (strip-scaling along the
-    other axis).
+2. **CLI parity** — the new browser-only ops (`opVibrance`, `opSplitTone`,
+   `opVignette`, `opHSL`, `opSharpen`) and the Light-tab ops only exist in
+   `pipeline.jsx`. Port them into `photofilm/filters.py` so the CLI can take
+   `--exposure`, `--vibrance`, `--vignette-amount`, `--hsl-red-h`, etc., and
+   so the eight built-in presets stay portable.
+3. **Define filters as edit-preset chains + in-app export for GitHub
+   contributions** — today the eight built-in presets are hand-authored ops
+   chains in `PRESETS_LIST` (`pipeline.jsx`) and `photofilm/presets.py`.
+   Adding a filter requires editing both files. Instead, treat a "filter" as
+   the same data shape the editor already produces: the user dials in Light
+   / Color / HSL / Curves / Effects / (LUT later), and we serialize that
+   into a portable preset JSON.
+   - Build a `filterFromUserAdjust(userAdjust, lutRef)` serializer that
+     emits the same `{id, name, sub, blurb, ops: [...]}` shape consumed by
+     `applyPreset`, expressed as ops the CLI already understands (so it
+     stays portable without a second authoring surface).
+   - Add an "EXPORT FILTER" action in the Export tab (or a new "Save as
+     filter" item on the film strip) that prompts for name/sub/blurb,
+     downloads `<id>.json`, and copies a ready-to-paste snippet for the
+     Python `PRESETS_LIST`.
+   - Document the contribution flow in `README.md`: drop the JSON into
+     `photofilm/filters/community/` (new dir) — both `presets.py` and
+     `pipeline.jsx` auto-pick it up — and open a PR. Include a `validate`
+     CLI subcommand that round-trips the JSON through both pipelines and
+     diffs the output, so reviewers can confirm parity.
 
 ## Approach for new pipeline ops
 

@@ -241,6 +241,36 @@ function opMonochrome(buf, n, { red = 0.3, green = 0.5, blue = 0.2 }) {
   }
 }
 
+// ---------- Color-space helpers -------------------------------------------
+// All three channels in [0,1]; outputs h, s, l in [0,1].
+function rgb2hsl(r, g, b) {
+  const max = r > g ? (r > b ? r : b) : (g > b ? g : b);
+  const min = r < g ? (r < b ? r : b) : (g < b ? g : b);
+  const l = (max + min) * 0.5;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if      (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else                h = (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+function hsl2rgb(h, s, l) {
+  if (s === 0) return [l, l, l];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hue2 = (t) => {
+    if (t < 0) t += 1; else if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 0.5)   return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [hue2(h + 1 / 3), hue2(h), hue2(h - 1 / 3)];
+}
+
 // ---------- Light-panel ops (user adjustments) ----------------------------
 // These run after the preset, sourced from the Light tab. Sliders pass
 // integer slider units; the ops scale them into pleasant ranges.
@@ -302,11 +332,224 @@ function opUnsharp(buf, n, width, height, { amount, radius }) {
   }
 }
 
+// ---------- Color-tab ops --------------------------------------------------
+// Vibrance: like saturation but biased toward less-saturated pixels. Slider
+// in [-1, +1]. At +1, near-grey pixels get a strong push and already-vibrant
+// pixels are mostly left alone (which avoids the over-pop look).
+function opVibrance(buf, n, { amount = 0 }) {
+  if (!amount) return;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const r = buf[idx], g = buf[idx + 1], b = buf[idx + 2];
+    const maxC = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    const minC = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    const sat = maxC - minC;
+    const k = 1 + amount * (1 - sat);
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    buf[idx]     = luma + (r - luma) * k;
+    buf[idx + 1] = luma + (g - luma) * k;
+    buf[idx + 2] = luma + (b - luma) * k;
+  }
+}
+
+// Split toning: tint shadows + highlights with separate hues. shadowSat /
+// highlightSat in [-1, +1] (negative just reverses the lift direction);
+// balance in [-1, +1] shifts the midpoint between shadow and highlight masks.
+function opSplitTone(buf, n, { shadowHue = 0, shadowSat = 0, highlightHue = 0, highlightSat = 0, balance = 0 }) {
+  if (!shadowSat && !highlightSat) return;
+  const sCol = hsl2rgb((shadowHue    % 360 + 360) % 360 / 360, 1, 0.5);
+  const hCol = hsl2rgb((highlightHue % 360 + 360) % 360 / 360, 1, 0.5);
+  const mid = 0.5 + balance * 0.5;
+  const sStrength = shadowSat    * 0.5;
+  const hStrength = highlightSat * 0.5;
+  const sDen = mid > 0 ? mid : 1e-3;
+  const hDen = (1 - mid) > 0 ? (1 - mid) : 1e-3;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const r = buf[idx], g = buf[idx + 1], b = buf[idx + 2];
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const sT = Math.max(0, mid - luma) / sDen;
+    const hT = Math.max(0, luma - mid) / hDen;
+    const sM = sT * sT * (3 - 2 * sT) * sStrength;
+    const hM = hT * hT * (3 - 2 * hT) * hStrength;
+    buf[idx]     = r + (sCol[0] - 0.5) * sM + (hCol[0] - 0.5) * hM;
+    buf[idx + 1] = g + (sCol[1] - 0.5) * sM + (hCol[1] - 0.5) * hM;
+    buf[idx + 2] = b + (sCol[2] - 0.5) * sM + (hCol[2] - 0.5) * hM;
+  }
+}
+
+// ---------- HSL-tab op -----------------------------------------------------
+// Eight color bands, each with hue/sat/lum offsets in [-1, +1]. We convert
+// each pixel to HSL once, sum the weighted contributions across overlapping
+// bands (60° half-width smoothstep), and convert back. Near-grey pixels are
+// gated out so neutral tones don't drift on big saturation pushes.
+const HSL_HUE_CENTERS = {
+  red:     0   / 360,
+  orange:  30  / 360,
+  yellow:  60  / 360,
+  green:   120 / 360,
+  aqua:    180 / 360,
+  blue:    240 / 360,
+  purple:  280 / 360,
+  magenta: 320 / 360,
+};
+const HSL_HUE_KEYS = Object.keys(HSL_HUE_CENTERS);
+
+function isHSLAdjustActive(a) {
+  if (!a) return false;
+  for (const k of HSL_HUE_KEYS) {
+    const c = a[k];
+    if (c && (c.h || c.s || c.l)) return true;
+  }
+  return false;
+}
+
+function opHSL(buf, n, adj) {
+  if (!isHSLAdjustActive(adj)) return;
+  const HALF = 60 / 360;
+  // Pre-flatten band data into parallel arrays for the inner loop.
+  const bands = HSL_HUE_KEYS.map((k) => {
+    const a = adj[k] || { h: 0, s: 0, l: 0 };
+    return { c: HSL_HUE_CENTERS[k], dh: a.h, ds: a.s, dl: a.l };
+  });
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3;
+    const r = buf[idx], g = buf[idx + 1], b = buf[idx + 2];
+    const [h, s, l] = rgb2hsl(r, g, b);
+    const satGate = Math.min(1, s * 4);
+    if (satGate <= 0) continue;
+    let dH = 0, dS = 0, dL = 0;
+    for (let j = 0; j < bands.length; j++) {
+      const band = bands[j];
+      if (!band.dh && !band.ds && !band.dl) continue;
+      let d = h - band.c;
+      if (d < -0.5) d += 1; else if (d > 0.5) d -= 1;
+      d = Math.abs(d);
+      if (d >= HALF) continue;
+      const t = 1 - d / HALF;
+      const w = t * t * (3 - 2 * t);
+      dH += band.dh * w;
+      dS += band.ds * w;
+      dL += band.dl * w;
+    }
+    // Slider [-1,+1] mappings: hue ±0.1 (~36°), sat ±0.8, lum ±0.4.
+    const newH = ((h + dH * 0.1 * satGate) % 1 + 1) % 1;
+    const newS = Math.max(0, Math.min(1, s + dS * 0.8 * satGate));
+    const newL = Math.max(0, Math.min(1, l + dL * 0.4 * satGate));
+    const [nr, ng, nb] = hsl2rgb(newH, newS, newL);
+    buf[idx]     = nr;
+    buf[idx + 1] = ng;
+    buf[idx + 2] = nb;
+  }
+}
+
+// ---------- Effects-tab ops ------------------------------------------------
+// Vignette: p-norm radial mask. roundness in [-1, +1] morphs the shape
+// between circle (1) and squircle (4); midpoint and feather control where
+// the falloff starts/ends in normalized image-radius units. amount<0 darkens
+// corners (the usual look); amount>0 brightens.
+function opVignette(buf, n, w, h, { amount = 0, midpoint = 0.5, roundness = 0, feather = 0.5 }) {
+  if (!amount) return;
+  const cx = w * 0.5, cy = h * 0.5;
+  const power = Math.max(1.2, 2 + roundness * 2);
+  const startR = midpoint;
+  const endR   = midpoint + Math.max(0.05, 1 - midpoint) * feather + 0.05;
+  for (let y = 0; y < h; y++) {
+    const dy = (y - cy) / cy;
+    const ady = Math.abs(dy);
+    const adyP = Math.pow(ady, power);
+    for (let x = 0; x < w; x++) {
+      const dx = (x - cx) / cx;
+      const adxP = Math.pow(Math.abs(dx), power);
+      const d = Math.pow(adxP + adyP, 1 / power);
+      let mask;
+      if (d <= startR)      mask = 0;
+      else if (d >= endR)   mask = 1;
+      else {
+        const t = (d - startR) / (endR - startR);
+        mask = t * t * (3 - 2 * t);
+      }
+      if (!mask) continue;
+      const idx = (y * w + x) * 3;
+      const delta = amount * mask;
+      buf[idx]     += delta;
+      buf[idx + 1] += delta;
+      buf[idx + 2] += delta;
+    }
+  }
+}
+
+// Sharpen: opUnsharp with masking threshold so flat areas aren't amplified.
+// masking in [0, 1] gates the unsharp delta by local contrast; detail in
+// [0, 1] adds a second small-radius pass for fine texture.
+function opSharpen(buf, n, width, height, { amount = 0, radius = 1.5, detail = 0, masking = 0 }) {
+  if (!amount || radius <= 0) return;
+  if (!masking && !detail) {
+    opUnsharp(buf, n, width, height, { amount, radius });
+    return;
+  }
+  // Bake current buf into a canvas so we can blur it.
+  const tmp = new ImageData(width, height);
+  floatToImageData(buf, tmp);
+  const src = document.createElement("canvas");
+  src.width = width; src.height = height;
+  src.getContext("2d").putImageData(tmp, 0, 0);
+  const dst = document.createElement("canvas");
+  dst.width = width; dst.height = height;
+  const dctx = dst.getContext("2d");
+  dctx.filter = `blur(${radius}px)`;
+  dctx.drawImage(src, 0, 0);
+  const blurred = dctx.getImageData(0, 0, width, height).data;
+  for (let i = 0; i < n; i++) {
+    const idx = i * 3, j = i * 4;
+    const dr = buf[idx]     - blurred[j]     / 255;
+    const dg = buf[idx + 1] - blurred[j + 1] / 255;
+    const db = buf[idx + 2] - blurred[j + 2] / 255;
+    const mag = Math.abs(dr) + Math.abs(dg) + Math.abs(db);
+    // edge-mask: at masking=0 everything passes; at masking=1 only strong
+    // edges contribute. Curve is intentionally gentle.
+    const gate = 1 - masking * (1 - Math.min(1, mag * 6));
+    buf[idx]     += amount * dr * gate;
+    buf[idx + 1] += amount * dg * gate;
+    buf[idx + 2] += amount * db * gate;
+  }
+  if (detail > 0) {
+    // Second pass at a smaller radius brings micro-detail back.
+    opUnsharp(buf, n, width, height, { amount: amount * detail * 0.7, radius: Math.max(0.5, radius * 0.3) });
+  }
+}
+
+// ---------- Adjustment-state defaults / activity checks -------------------
 // Light-panel adjustments. Stored in slider units (see ZERO_LIGHT).
 const ZERO_LIGHT = {
   exposure: 0, contrast: 0,
   highlights: 0, shadows: 0, whites: 0, blacks: 0,
   texture: 0, clarity: 0, dehaze: 0,
+};
+
+const ZERO_COLOR = {
+  temp: 0, tint: 0,
+  vibrance: 0, saturation: 0,
+  shadowHue: 210, shadowSat: 0,
+  highlightHue: 40, highlightSat: 0,
+  balance: 0,
+};
+
+const ZERO_HSL = Object.fromEntries(HSL_HUE_KEYS.map((k) => [k, { h: 0, s: 0, l: 0 }]));
+
+// Curves: points in [0,1] in increasing x order. Identity is [[0,0],[1,1]].
+const IDENTITY_CURVE = [[0, 0], [1, 1]];
+const ZERO_CURVES = {
+  rgb: IDENTITY_CURVE.map((p) => [...p]),
+  r:   IDENTITY_CURVE.map((p) => [...p]),
+  g:   IDENTITY_CURVE.map((p) => [...p]),
+  b:   IDENTITY_CURVE.map((p) => [...p]),
+};
+
+const ZERO_EFFECTS = {
+  grainAmount: 0, grainSize: 50, grainRoughness: 30,
+  vignetteAmount: 0, vignetteMidpoint: 50, vignetteRoundness: 0, vignetteFeather: 50,
+  sharpenAmount: 0, sharpenRadius: 10, sharpenDetail: 25, sharpenMasking: 0,
 };
 
 function isLightAdjustActive(a) {
@@ -315,26 +558,111 @@ function isLightAdjustActive(a) {
   return false;
 }
 
-function applyLightAdjust(imageData, width, height, a) {
-  if (!isLightAdjustActive(a)) return imageData;
+function isColorAdjustActive(a) {
+  if (!a) return false;
+  return !!(a.temp || a.tint || a.vibrance || a.saturation || a.shadowSat || a.highlightSat);
+}
+
+function isCurveIdentity(points) {
+  if (!points || points.length !== 2) return points && points.length > 2 ? false : true;
+  return points[0][0] === 0 && points[0][1] === 0 && points[1][0] === 1 && points[1][1] === 1;
+}
+
+function isCurvesAdjustActive(a) {
+  if (!a) return false;
+  return !isCurveIdentity(a.rgb) || !isCurveIdentity(a.r) || !isCurveIdentity(a.g) || !isCurveIdentity(a.b);
+}
+
+function isEffectsAdjustActive(a) {
+  if (!a) return false;
+  return !!(a.grainAmount || a.vignetteAmount || a.sharpenAmount);
+}
+
+function isUserAdjustActive(u) {
+  if (!u) return false;
+  return isLightAdjustActive(u.light)
+      || isColorAdjustActive(u.color)
+      || isHSLAdjustActive(u.hsl)
+      || isCurvesAdjustActive(u.curves)
+      || isEffectsAdjustActive(u.effects);
+}
+
+// Run all user adjustments after the preset, in Lightroom-ish order:
+// WB → exposure/contrast → tonal regions → presence → curves → HSL → vibrance/
+// saturation → split tone → sharpen → vignette → grain. One buffer round-trip.
+function applyUserAdjustments(imageData, width, height, u) {
+  if (!isUserAdjustActive(u)) return imageData;
   const out = new ImageData(new Uint8ClampedArray(imageData.data), width, height);
   const buf = imageDataToFloat(out);
   const n = width * height;
-  // exposure stored as tenths of an EV (slider int −50..+50 → −5..+5 EV).
-  opExposure(buf, { ev: a.exposure / 10 });
-  opContrast(buf, n, { amount: a.contrast / 100 });
-  opLightTone(buf, n, {
-    highlights: a.highlights / 100,
-    shadows:    a.shadows    / 100,
-    whites:     a.whites     / 100,
-    blacks:     a.blacks     / 100,
-  });
-  // Radius tuned per slider: texture = fine detail; clarity = mid-tones; dehaze = haze halo.
-  if (a.texture) opUnsharp(buf, n, width, height, { amount: a.texture / 100, radius: 2  });
-  if (a.clarity) opUnsharp(buf, n, width, height, { amount: a.clarity / 100, radius: 15 });
-  if (a.dehaze)  opUnsharp(buf, n, width, height, { amount: a.dehaze  / 100, radius: 45 });
+  const L = u.light, C = u.color, H = u.hsl, CV = u.curves, FX = u.effects;
+
+  if (C) {
+    if (C.temp || C.tint) opWhiteBalance(buf, n, { temp: C.temp / 100, tint: C.tint / 100 });
+  }
+  if (L) {
+    if (L.exposure) opExposure(buf, { ev: L.exposure / 10 });
+    if (L.contrast) opContrast(buf, n, { amount: L.contrast / 100 });
+    opLightTone(buf, n, {
+      highlights: L.highlights / 100,
+      shadows:    L.shadows    / 100,
+      whites:     L.whites     / 100,
+      blacks:     L.blacks     / 100,
+    });
+    if (L.texture) opUnsharp(buf, n, width, height, { amount: L.texture / 100, radius: 2  });
+    if (L.clarity) opUnsharp(buf, n, width, height, { amount: L.clarity / 100, radius: 15 });
+    if (L.dehaze)  opUnsharp(buf, n, width, height, { amount: L.dehaze  / 100, radius: 45 });
+  }
+  if (CV) {
+    if (!isCurveIdentity(CV.rgb)) opToneCurve(buf, n, { points: CV.rgb, channel: "rgb" });
+    if (!isCurveIdentity(CV.r))   opToneCurve(buf, n, { points: CV.r,   channel: "r"   });
+    if (!isCurveIdentity(CV.g))   opToneCurve(buf, n, { points: CV.g,   channel: "g"   });
+    if (!isCurveIdentity(CV.b))   opToneCurve(buf, n, { points: CV.b,   channel: "b"   });
+  }
+  if (H) opHSL(buf, n, H);
+  if (C) {
+    if (C.vibrance)   opVibrance(buf, n, { amount: C.vibrance / 100 });
+    if (C.saturation) opSaturation(buf, n, { amount: C.saturation / 100 });
+    if (C.shadowSat || C.highlightSat) {
+      opSplitTone(buf, n, {
+        shadowHue: C.shadowHue, shadowSat: C.shadowSat / 100,
+        highlightHue: C.highlightHue, highlightSat: C.highlightSat / 100,
+        balance: C.balance / 100,
+      });
+    }
+  }
+  if (FX) {
+    if (FX.sharpenAmount) {
+      opSharpen(buf, n, width, height, {
+        amount: FX.sharpenAmount / 100,
+        radius: Math.max(0.3, FX.sharpenRadius / 10),
+        detail: FX.sharpenDetail / 100,
+        masking: FX.sharpenMasking / 100,
+      });
+    }
+    if (FX.vignetteAmount) {
+      opVignette(buf, n, width, height, {
+        amount: FX.vignetteAmount / 100,
+        midpoint: FX.vignetteMidpoint / 100,
+        roundness: FX.vignetteRoundness / 100,
+        feather: FX.vignetteFeather / 100,
+      });
+    }
+    if (FX.grainAmount) {
+      // Size shrinks the per-pixel scale; roughness boosts variance.
+      opGrain(buf, n, {
+        amount: (FX.grainAmount / 100) * (1 + FX.grainRoughness / 200),
+        seed: 17 + ((FX.grainSize | 0) * 7),
+      });
+    }
+  }
   floatToImageData(buf, out);
   return out;
+}
+
+// Back-compat shim so older callers that pass only a light slice still work.
+function applyLightAdjust(imageData, width, height, lightAdjust) {
+  return applyUserAdjustments(imageData, width, height, { light: lightAdjust });
 }
 
 function opBloom(buf, n, width, height, { threshold = 0.6, blur_radius = 20.0, amount = 0.5 }) {
@@ -616,6 +944,93 @@ function bakeFlip(src, axis) {
   return c;
 }
 
+// Composite transform — keystone (vertical+horizontal), rotation, scale, and
+// pan offset, all baked in one pass on top of the source canvas. Used by the
+// Crop tab's PERSPECTIVE section. The output canvas matches the source size;
+// empty pixels stay black.
+function bakeTransform(src, t) {
+  const v   = t.vertical   || 0;
+  const h   = t.horizontal || 0;
+  const rot = (t.rotateDeg || 0) * Math.PI / 180;
+  const s   = t.scale  || 0;   // -1..+1
+  const ox  = t.offsetX || 0;  // normalized to width
+  const oy  = t.offsetY || 0;  // normalized to height
+  if (!v && !h && !rot && !s && !ox && !oy) return src;
+  const sw = src.width, sh = src.height;
+  const out = document.createElement("canvas");
+  out.width = sw; out.height = sh;
+  const ctx = out.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, sw, sh);
+
+  // Translate the keystone-bearing source through a strip composite, then
+  // rotate / scale / offset the whole thing on top. That ordering matches the
+  // mental model of "warp the image, then frame it."
+  const keystoneNeeded = Math.abs(v) > 0.001 || Math.abs(h) > 0.001;
+  const keyCanvas = keystoneNeeded ? document.createElement("canvas") : src;
+  if (keystoneNeeded) {
+    keyCanvas.width = sw; keyCanvas.height = sh;
+    const kctx = keyCanvas.getContext("2d");
+    kctx.imageSmoothingQuality = "high";
+    const maxScale = 1 + Math.max(Math.abs(v), Math.abs(h));
+    const baseScale = 1 / maxScale;
+    // Vertical keystone: width varies along Y. Horizontal keystone: height
+    // varies along X. We composite once per axis; if both are set, vertical
+    // happens first (to a temp), then horizontal on the result.
+    const verticalPass = (srcCanvas, dstCtx) => {
+      const strips = Math.max(150, Math.min(400, Math.round(sh / 4)));
+      for (let i = 0; i < strips; i++) {
+        const t2 = i / (strips - 1);
+        const sy = i * sh / strips;
+        const shStrip = sh / strips + 1;
+        const stripScale = baseScale * (1 + v * (2 * t2 - 1));
+        const dw = sw * stripScale;
+        const dx = (sw - dw) / 2;
+        const dy = i * sh / strips;
+        const dh = sh / strips + 1;
+        dstCtx.drawImage(srcCanvas, 0, sy, sw, shStrip, dx, dy, dw, dh);
+      }
+    };
+    const horizontalPass = (srcCanvas, dstCtx) => {
+      const strips = Math.max(150, Math.min(400, Math.round(sw / 4)));
+      for (let i = 0; i < strips; i++) {
+        const t2 = i / (strips - 1);
+        const sxs = i * sw / strips;
+        const swStrip = sw / strips + 1;
+        const stripScale = baseScale * (1 + h * (2 * t2 - 1));
+        const dh = sh * stripScale;
+        const dy = (sh - dh) / 2;
+        const dx = i * sw / strips;
+        const dw = sw / strips + 1;
+        dstCtx.drawImage(srcCanvas, sxs, 0, swStrip, sh, dx, dy, dw, dh);
+      }
+    };
+    if (Math.abs(v) > 0.001 && Math.abs(h) > 0.001) {
+      const mid = document.createElement("canvas");
+      mid.width = sw; mid.height = sh;
+      verticalPass(src, mid.getContext("2d"));
+      kctx.fillStyle = "#000"; kctx.fillRect(0, 0, sw, sh);
+      horizontalPass(mid, kctx);
+    } else if (Math.abs(v) > 0.001) {
+      verticalPass(src, kctx);
+    } else {
+      horizontalPass(src, kctx);
+    }
+  }
+
+  // Final framing: rotate, scale, offset. The "scale" slider zooms in on the
+  // image (positive) or out (negative); offsets pan in normalized units.
+  const zoom = Math.pow(2, s);  // s=0 → 1.0, s=1 → 2.0, s=-1 → 0.5
+  ctx.save();
+  ctx.translate(sw / 2 + ox * sw, sh / 2 + oy * sh);
+  ctx.rotate(rot);
+  ctx.scale(zoom, zoom);
+  ctx.drawImage(keyCanvas, -sw / 2, -sh / 2);
+  ctx.restore();
+  return out;
+}
+
 // amount in [-0.5, 0.5]. Positive = top wider than bottom (correct converging
 // verticals when shooting up at a building).
 function bakePerspective(src, amount) {
@@ -799,7 +1214,7 @@ function Slider({ label, value, unit = "", min = -100, max = 100, color = "#fff"
 // UI elements that don't have a sourceCanvas yet). Memoizes via a per-photo
 // cache keyed by presetId so the same thumb isn't recomputed on every render.
 // --------------------------------------------------------------------------
-function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensity = 1, lightAdjust, style = {}, className = "", objectFit = "contain", fallbackUrl = DEMO_PHOTO, fallbackFilter = "" }) {
+function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensity = 1, userAdjust, style = {}, className = "", objectFit = "contain", fallbackUrl = DEMO_PHOTO, fallbackFilter = "" }) {
   const canvasRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -816,8 +1231,8 @@ function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensit
       }
       if (cancelled) return;
       // Apply user adjustments on top — never mutate the cached preset output.
-      const display = isLightAdjustActive(lightAdjust)
-        ? applyLightAdjust(filtered, sourceW, sourceH, lightAdjust)
+      const display = isUserAdjustActive(userAdjust)
+        ? applyUserAdjustments(filtered, sourceW, sourceH, userAdjust)
         : filtered;
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -825,7 +1240,7 @@ function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensit
       canvas.getContext("2d").putImageData(display, 0, 0);
     });
     return () => { cancelled = true; };
-  }, [sourceData, sourceW, sourceH, presetId, cache, lightAdjust]);
+  }, [sourceData, sourceW, sourceH, presetId, cache, userAdjust]);
 
   // object-fit on a <canvas> uses the canvas's bitmap as the "object" and the
   // CSS box as the "container" — `contain` preserves aspect on the hero, and
@@ -881,12 +1296,19 @@ Object.assign(window, {
   opToneCurve, opWhiteBalance, opSaturation, opChannelSaturation,
   opContrast, opGrain, opMonochrome, opBloom,
   opExposure, opLightTone, opUnsharp,
-  applyLightAdjust, isLightAdjustActive, ZERO_LIGHT,
+  opVibrance, opSplitTone, opVignette, opSharpen, opHSL,
+  rgb2hsl, hsl2rgb,
+  applyUserAdjustments, isUserAdjustActive,
+  applyLightAdjust, isLightAdjustActive,
+  isColorAdjustActive, isHSLAdjustActive, isCurvesAdjustActive, isEffectsAdjustActive,
+  ZERO_LIGHT, ZERO_COLOR, ZERO_HSL, ZERO_CURVES, ZERO_EFFECTS,
+  HSL_HUE_KEYS, HSL_HUE_CENTERS,
+  isCurveIdentity, IDENTITY_CURVE,
   // loaders
   isLoadableImage, loadImageFromBlob, loadOrientedCanvas,
   extractEmbeddedJpeg, downscaleToImageData,
   // edits
-  inscribedRect, bakeCrop, bakeRotate, bakeQuarterTurn, bakeFlip, bakePerspective,
+  inscribedRect, bakeCrop, bakeRotate, bakeQuarterTurn, bakeFlip, bakePerspective, bakeTransform,
   // components
   PhotofilmLogo, Histogram, Slider, FilteredPhoto,
 });
