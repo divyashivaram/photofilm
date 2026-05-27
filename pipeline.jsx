@@ -1284,6 +1284,22 @@ function OriginalCanvas({ sourceData, sourceW, sourceH, style }) {
   return <canvas ref={ref} style={style} />;
 }
 
+// ----------------------------------------------------------------------------
+// Phase 1 of the "filters as JSON" plan (see CLAUDE.md TODOs): dump the
+// current editor state as a portable spec the user can share. Not yet a
+// runnable preset — Claude / a human authors the ops chain from this.
+// ----------------------------------------------------------------------------
+function serializeUserEdits({ baselinePreset, intensity, sourceName, userAdjust }) {
+  return {
+    schemaVersion: 1,
+    savedAt: new Date().toISOString(),
+    baselinePreset: baselinePreset || null,
+    intensity: typeof intensity === "number" ? intensity : null,
+    sourceName: sourceName || null,
+    userAdjust: userAdjust || null,
+  };
+}
+
 // ============================================================================
 Object.assign(window, {
   // file-format
@@ -1291,6 +1307,7 @@ Object.assign(window, {
   DEMO_PHOTO, DEMO_PHOTO_FALLBACK,
   // presets
   PRESETS, PRESETS_LIST, PRESET_IDS, FILM_CURVE,
+  serializeUserEdits,
   // pipeline
   applyPreset, imageDataToFloat, floatToImageData,
   opToneCurve, opWhiteBalance, opSaturation, opChannelSaturation,

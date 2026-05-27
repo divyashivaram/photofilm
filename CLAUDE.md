@@ -101,26 +101,38 @@ any slider re-renders without invalidating the (expensive) preset cache.
    `pipeline.jsx`. Port them into `photofilm/filters.py` so the CLI can take
    `--exposure`, `--vibrance`, `--vignette-amount`, `--hsl-red-h`, etc., and
    so the eight built-in presets stay portable.
-3. **Define filters as edit-preset chains + in-app export for GitHub
-   contributions** — today the eight built-in presets are hand-authored ops
-   chains in `PRESETS_LIST` (`pipeline.jsx`) and `photofilm/presets.py`.
-   Adding a filter requires editing both files. Instead, treat a "filter" as
-   the same data shape the editor already produces: the user dials in Light
-   / Color / HSL / Curves / Effects / (LUT later), and we serialize that
-   into a portable preset JSON.
-   - Build a `filterFromUserAdjust(userAdjust, lutRef)` serializer that
-     emits the same `{id, name, sub, blurb, ops: [...]}` shape consumed by
-     `applyPreset`, expressed as ops the CLI already understands (so it
-     stays portable without a second authoring surface).
-   - Add an "EXPORT FILTER" action in the Export tab (or a new "Save as
-     filter" item on the film strip) that prompts for name/sub/blurb,
-     downloads `<id>.json`, and copies a ready-to-paste snippet for the
-     Python `PRESETS_LIST`.
-   - Document the contribution flow in `README.md`: drop the JSON into
-     `photofilm/filters/community/` (new dir) — both `presets.py` and
-     `pipeline.jsx` auto-pick it up — and open a PR. Include a `validate`
-     CLI subcommand that round-trips the JSON through both pipelines and
-     diffs the output, so reviewers can confirm parity.
+3. **Filters as edit-preset chains** — today the eight built-in presets are
+   hand-authored ops chains in `PRESETS_LIST` (`pipeline.jsx`) and
+   `photofilm/presets.py`. Adding a filter requires editing both files.
+   Goal: treat a "filter" as the same data shape the editor already produces
+   so the user can dial in Light/Color/HSL/Curves/Effects/(LUT later) and we
+   serialize that into a portable preset JSON.
+
+   - **Phase 1 — share edits as JSON (DONE).** `serializeUserEdits` in
+     `pipeline.jsx` + "SAVE EDITS AS JSON" button in the Export tab dump
+     `{schemaVersion, savedAt, baselinePreset, intensity, sourceName,
+     userAdjust}` to a file. Not yet replayable as a preset — used to share
+     edit state for hand-authoring a filter into `PRESETS_LIST`.
+
+   - **Phase 2 — make the JSON itself a runnable preset.** Build
+     `filterFromUserAdjust(userAdjust, lutRef)` that emits the same
+     `{id, name, sub, blurb, ops: [...]}` shape `applyPreset` consumes.
+     Blocker: most userAdjust features have no matching preset op (Light
+     tab, vibrance, split_tone, vignette, HSL, sharpen live only inside
+     `applyUserAdjustments`). Close the gap by either (a) exposing those
+     internals as named ops in the preset dispatcher, or (b) adding a
+     single passthrough op `["user_adjust", {...}]` that calls
+     `applyUserAdjustments`. Then extend the Export tab to prompt for
+     name/sub/blurb and download a paste-ready `PRESETS_LIST` snippet.
+
+   - **Phase 3 — CLI parity + contribution flow.** Subsumes TODO #2: port
+     the browser-only ops into `photofilm/filters.py` with identical math
+     so JSON presets run in both surfaces. Document the contribution flow
+     in `README.md`: drop the JSON into `photofilm/filters/community/`
+     (new dir) — both `presets.py` and `pipeline.jsx` auto-pick it up —
+     and open a PR. Include a `validate` CLI subcommand that round-trips
+     the JSON through both pipelines and diffs the output, so reviewers
+     can confirm parity.
 
 ## Approach for new pipeline ops
 

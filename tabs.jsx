@@ -69,6 +69,15 @@ function TabLight({ ctx }) {
         <TabSlider label="Clarity" value={L.clarity} ctx={ctx} onChange={(v) => updateLight("clarity", v)} />
         <TabSlider label="Dehaze"  value={L.dehaze}  ctx={ctx} onChange={(v) => updateLight("dehaze",  v)} />
       </div>
+
+      <div style={{ height: 1, background: ctx.border, margin: "4px 0 14px" }} />
+      <div style={{
+        fontFamily: ctx.mono, fontSize: 10, letterSpacing: "0.14em",
+        color: ctx.muted, marginBottom: 14,
+      }}>
+        CROP / PERSPECTIVE
+      </div>
+      <TabCrop ctx={ctx} />
     </div>
   );
 }
@@ -1008,7 +1017,7 @@ const EXPORT_FORMATS = {
 
 function TabExport({ ctx }) {
   const ph = usePhotofilm();
-  const { sourceCanvas, sourceName, activePreset, intensity, selected, toggleSelected } = ph;
+  const { sourceCanvas, sourceName, activePreset, intensity, selected, toggleSelected, userAdjust } = ph;
   const [format, setFormat]     = React.useState("JPEG");
   const [quality, setQuality]   = React.useState(92);
   const [longEdge, setLongEdge] = React.useState(0);   // 0 = full
@@ -1019,6 +1028,18 @@ function TabExport({ ctx }) {
   // selection, use that list; else fall back to the currently active preset.
   const exportIds = selected.size > 0 ? Array.from(selected) : (activePreset ? [activePreset] : []);
   const baseName = sourceName.replace(/\.[^.]+$/, "") || "image";
+
+  const doSaveEdits = React.useCallback(() => {
+    const spec = serializeUserEdits({
+      baselinePreset: activePreset,
+      intensity,
+      sourceName,
+      userAdjust,
+    });
+    const json = JSON.stringify(spec, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    triggerDownload(blob, `${baseName}_edits.json`);
+  }, [activePreset, intensity, sourceName, userAdjust, baseName]);
 
   const doExport = React.useCallback(async () => {
     if (!sourceCanvas || exportIds.length === 0 || busy) return;
@@ -1148,6 +1169,24 @@ function TabExport({ ctx }) {
         {busy && progress
           ? `RENDERING ${progress.i}/${progress.total} · ${progress.name}`
           : `↗ EXPORT ${exportIds.length} ${exportIds.length === 1 ? "PHOTO" : "PHOTOS"}`}
+      </button>
+
+      <div style={{ height: 1, background: ctx.border, margin: "18px 0 14px" }} />
+
+      <SectionHeader mono={ctx.mono} muted={ctx.muted} accent={ctx.accent} right={false}>FILTER SPEC</SectionHeader>
+      <div style={{ fontFamily: ctx.mono, fontSize: 9.5, color: ctx.ultraMuted, marginBottom: 10, letterSpacing: "0.04em", lineHeight: 1.5 }}>
+        SAVE THE CURRENT BASELINE PRESET + INTENSITY + ALL LIGHT/COLOR/HSL/CURVES/EFFECTS SLIDERS AS A JSON SPEC. SHARE IT TO HAVE A NEW FILTER AUTHORED FROM YOUR EDITS.
+      </div>
+      <button
+        onClick={doSaveEdits}
+        style={{
+          width: "100%", background: "transparent", color: ctx.text,
+          border: `1px solid ${ctx.border}`,
+          padding: "9px 0", fontFamily: ctx.mono, fontSize: 10.5, fontWeight: 600,
+          letterSpacing: "0.1em", cursor: "pointer", borderRadius: 2,
+        }}
+      >
+        ↓ SAVE EDITS AS JSON
       </button>
     </div>
   );
