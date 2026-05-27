@@ -1,8 +1,10 @@
 # photofilm
 
-A terminal-based photo editor that applies Fujifilm-inspired film simulations
-(and a synthwave neon look) to photos. Hand-tuned presets cover most everyday
-looks; for higher fidelity, drop in any Adobe `.cube` 3D LUT.
+A photo editor that applies Fujifilm-inspired film simulations (and a few
+moodier looks like synthwave and CineStill tungsten) to photos. Use the CLI
+for batch work or the self-contained browser app for interactive edits with
+crop, rotate, and perspective. Hand-tuned presets cover most everyday looks;
+for higher fidelity, drop in any Adobe `.cube` 3D LUT.
 
 ## Install
 
@@ -37,6 +39,24 @@ Output saves alongside the source as `<name>_<preset>.<ext>` by default
 (or into `--out-dir` if you want to keep things tidy). RAW files always
 output as JPEG since we can't write back to camera RAW formats.
 
+## Browser viewer
+
+`viewer.html` is a self-contained, zero-install web app that runs every
+preset locally in your browser. Open the file directly (no server needed)
+and drop a photo onto it — or paste from the clipboard.
+
+- **Filters tab** — compare all film stocks side by side, with an
+  intensity slider and a draggable scrubber for before/after.
+- **Tools tab** — non-destructive **crop**, **rotate** (free-angle or
+  quarter turns), and **perspective** (vertical keystone correction)
+  applied to the source before filtering.
+- **Export tab** — pick any combination of looks and download them as
+  a zip in one shot.
+
+Same eight presets as the CLI. RAW decoding in the browser depends on
+your OS being able to render the format; for full RAW support use the
+CLI.
+
 ## Presets
 
 | Preset            | Character                                                          |
@@ -48,6 +68,7 @@ output as JPEG since we can't write back to camera RAW formats.
 | `acros`           | Dramatic black and white with strong reds                          |
 | `eterna`          | Faded, low-contrast, nostalgic cinema look                         |
 | `synthwave`       | Cyberpunk neon: purple shadows, hot-pink/cyan highlights, bloom    |
+| `japan-night`     | CineStill 800T tungsten with halation and neon haze                |
 
 All presets are hand-tuned approximations. For true Fuji film simulations,
 use `--lut path/to/fuji.cube` with an official or community LUT instead.
@@ -68,6 +89,7 @@ photofilm/
 ├── filters.py    # Core image ops (curves, WB, saturation, grain, bloom)
 ├── presets.py    # Named presets — each a sequence of (op, kwargs)
 └── lut.py        # Adobe .cube LUT loader
+viewer.html       # Standalone browser app — same presets, plus crop/rotate/perspective
 ```
 
 ## Adding your own preset

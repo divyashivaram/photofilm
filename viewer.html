@@ -19,6 +19,8 @@
     --danger: #d97757;
     --good: #7fb069;
     --shadow-1: 0 1px 0 rgba(255,240,220,0.04), 0 6px 24px rgba(0,0,0,0.4);
+    --sidebar-w: 380px;
+    --header-h: 56px;
   }
 
   * { box-sizing: border-box; }
@@ -62,7 +64,7 @@
     border-bottom: 1px solid var(--hairline);
     padding: 14px 28px;
     display: flex; align-items: center; gap: 20px;
-    min-height: 56px;
+    min-height: var(--header-h);
   }
   .brand {
     display: flex; align-items: baseline; gap: 10px;
@@ -135,7 +137,7 @@
   /* ---------- empty state (drop zone) ---------- */
   #empty {
     position: relative; z-index: 1;
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - var(--header-h));
     display: flex; align-items: center; justify-content: center;
     padding: 60px 24px;
   }
@@ -180,21 +182,38 @@
     letter-spacing: 0.05em;
   }
 
-  /* ---------- workspace ---------- */
-  #workspace { display: none; position: relative; z-index: 1; }
+  /* ---------- workspace layout ---------- */
+  #workspace {
+    display: none;
+    position: relative;
+    z-index: 1;
+    height: calc(100vh - var(--header-h));
+  }
   #workspace.active { display: block; }
 
-  .hero-wrap {
-    padding: 20px 28px 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-w);
+    gap: 20px;
+    padding: 20px 28px;
+    height: 100%;
+    box-sizing: border-box;
   }
+
+  .preview-pane {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ---------- hero (image preview) ---------- */
   .hero {
     position: relative;
-    width: var(--hero-w, min(1100px, calc(100vw - 56px)));
-    height: var(--hero-h, auto);
+    width: var(--hero-w, 800px);
+    height: var(--hero-h, 600px);
     background: #000;
     border-radius: 6px;
     overflow: hidden;
@@ -281,53 +300,112 @@
   }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-  /* ---------- hero meta + controls ---------- */
-  .hero-meta {
-    width: var(--hero-w, min(1100px, calc(100vw - 56px)));
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: end;
-    gap: 32px;
-    padding-top: 0;
+  /* ---------- sidebar (tabs) ---------- */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 0;
+    box-shadow: var(--shadow-1);
   }
-  .hero-meta .stock-name {
+
+  .tabs {
+    display: flex;
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--hairline);
+    background: rgba(255,240,220,0.012);
+  }
+  .tab {
+    flex: 1;
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    padding: 14px 12px;
+    font: inherit;
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s, background 0.15s;
+  }
+  .tab::after {
+    content: "";
+    position: absolute;
+    left: 18px; right: 18px; bottom: -1px;
+    height: 2px;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.is-active { color: var(--accent); }
+  .tab.is-active::after { background: var(--accent); }
+
+  .tab-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-strong) transparent;
+  }
+  .tab-panel[hidden] { display: none; }
+  .tab-panel::-webkit-scrollbar { width: 8px; }
+  .tab-panel::-webkit-scrollbar-track { background: transparent; }
+  .tab-panel::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: 4px; }
+  .tab-panel::-webkit-scrollbar-thumb:hover { background: var(--ink-dim); }
+
+  /* ---------- Filters tab ---------- */
+  .stock-head .stock-name {
     font-family: "Charter", "Iowan Old Style", "Georgia", serif;
-    font-size: 24px;
+    font-weight: 400;
+    font-size: 22px;
     letter-spacing: -0.015em;
     margin: 0;
     color: var(--ink);
-    font-weight: 400;
-    line-height: 1.1;
+    line-height: 1.15;
   }
-  .hero-meta .stock-blurb {
-    margin: 4px 0 0;
+  .stock-head .stock-blurb {
+    margin: 6px 0 0;
     color: var(--ink-dim);
-    font-size: 13.5px;
-    max-width: 56ch;
+    font-size: 13px;
+    line-height: 1.45;
   }
-  .hero-controls {
+
+  .intensity-row {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+  }
+  .intensity-row .label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
     flex-shrink: 0;
   }
-  .intensity {
-    display: flex; align-items: center; gap: 10px;
-    color: var(--ink-dim);
-    font-size: 11px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-  .intensity input[type="range"] {
+  .intensity-row input[type="range"] {
     appearance: none;
-    width: 140px;
+    flex: 1;
     height: 2px;
     background: var(--hairline-strong);
     border-radius: 1px;
     outline: none;
     cursor: pointer;
+    min-width: 0;
   }
-  .intensity input[type="range"]::-webkit-slider-thumb {
+  .intensity-row input[type="range"]::-webkit-slider-thumb {
     appearance: none;
     width: 14px; height: 14px;
     border-radius: 50%;
@@ -336,125 +414,75 @@
     cursor: grab;
     transition: transform 0.1s;
   }
-  .intensity input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.15); cursor: grabbing; }
-  .intensity-val {
+  .intensity-row input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.15); cursor: grabbing; }
+  .intensity-row .readout {
     font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
     font-size: 11.5px;
     color: var(--ink);
     min-width: 38px;
     text-align: right;
-    letter-spacing: 0;
   }
 
-  .select-btn {
-    background: transparent;
-    border: 1px solid var(--hairline-strong);
-    color: var(--ink);
-    border-radius: 999px;
-    padding: 8px 16px 8px 12px;
-    font: inherit;
-    font-size: 12.5px;
-    cursor: pointer;
-    display: inline-flex; align-items: center; gap: 8px;
-    transition: all 0.15s ease;
-  }
-  .select-btn:hover { border-color: var(--ink-dim); }
-  .select-btn .star {
-    width: 14px; height: 14px;
-    border: 1.5px solid var(--ink-dim);
-    border-radius: 4px;
-    display: inline-flex; align-items: center; justify-content: center;
-    transition: all 0.15s;
-  }
-  .select-btn.is-selected {
-    background: rgba(200, 155, 110, 0.12);
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .select-btn.is-selected .star {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-  .select-btn.is-selected .star::after {
-    content: "";
-    width: 5px; height: 9px;
-    border: solid #1a1208;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg) translate(-1px, -1px);
-  }
-
-  /* ---------- filmstrip ---------- */
-  .strip-wrap {
-    margin-top: 18px;
-    padding: 12px 28px 18px;
-    border-top: 1px solid var(--hairline);
-    background: linear-gradient(180deg, rgba(255,240,220,0.02), transparent);
-  }
-  .strip-label {
+  .section-label {
     display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 10px;
     font-size: 10px;
     letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--muted);
+    margin-top: 2px;
   }
-  .strip-label .strip-count { color: var(--ink-dim); }
-  .strip {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 4px 2px 16px;
-    scroll-snap-type: x proximity;
-    scrollbar-width: thin;
-    scrollbar-color: var(--hairline-strong) transparent;
-  }
-  .strip::-webkit-scrollbar { height: 8px; }
-  .strip::-webkit-scrollbar-track { background: transparent; }
-  .strip::-webkit-scrollbar-thumb {
-    background: var(--hairline-strong);
-    border-radius: 4px;
-  }
-  .strip::-webkit-scrollbar-thumb:hover { background: var(--ink-dim); }
 
-  .frame {
-    flex: 0 0 auto;
-    width: var(--frame-w, 180px);
-    scroll-snap-align: start;
+  .preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .preset-row {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    background: transparent;
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
     cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .preset-row:hover { background: var(--surface-2); border-color: var(--hairline-strong); }
+  .preset-row.is-active {
+    background: var(--surface-2);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .preset-row .thumb {
+    width: 56px;
+    aspect-ratio: var(--thumb-aspect, 3/2);
     border-radius: 4px;
     overflow: hidden;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    position: relative;
-    transition: transform 0.15s ease, border-color 0.15s ease;
+    background: #000;
+    flex-shrink: 0;
   }
-  .frame:hover { transform: translateY(-2px); border-color: var(--hairline-strong); }
-  .frame.is-active {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(200,155,110,0.15);
-  }
-  .frame canvas {
+  .preset-row .thumb canvas {
     width: 100%;
-    height: auto;
+    height: 100%;
     display: block;
     background: #000;
   }
-  .frame canvas.loading { opacity: 0.4; }
-  .frame-meta {
-    padding: 7px 10px 8px;
-    border-top: 1px solid var(--hairline);
-    background: rgba(0,0,0,0.25);
-  }
-  .frame-name {
+  .preset-row .thumb canvas.loading { opacity: 0.4; }
+
+  .preset-row .info { min-width: 0; }
+  .preset-row .info-title {
     font-family: "Charter", "Iowan Old Style", "Georgia", serif;
-    font-size: 13.5px;
-    color: var(--ink);
-    margin: 0;
+    font-size: 14px;
     letter-spacing: -0.01em;
+    margin: 0;
+    color: var(--ink);
   }
-  .frame-blurb {
-    font-size: 10px;
+  .preset-row .info-blurb {
+    font-size: 10.5px;
     color: var(--muted);
     margin: 1px 0 0;
     letter-spacing: 0.02em;
@@ -462,29 +490,30 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .frame-check {
-    position: absolute;
-    top: 8px; right: 8px;
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    background: rgba(20,20,25,0.7);
+
+  .preset-check {
+    appearance: none;
+    background: transparent;
     border: 1px solid var(--hairline-strong);
-    backdrop-filter: blur(6px);
+    border-radius: 50%;
+    width: 22px; height: 22px;
     display: flex; align-items: center; justify-content: center;
-    color: rgba(255,240,220,0.7);
     cursor: pointer;
-    transition: all 0.15s ease;
-    z-index: 2;
-    opacity: 0;
+    color: transparent;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    padding: 0;
+    flex-shrink: 0;
   }
-  .frame:hover .frame-check { opacity: 1; }
-  .frame.is-selected .frame-check {
-    opacity: 1;
+  .preset-check:hover {
+    border-color: var(--ink-dim);
+    color: var(--ink-dim);
+  }
+  .preset-row.is-selected .preset-check {
     background: var(--accent);
     border-color: var(--accent);
     color: #1a1208;
   }
-  .frame-check::after {
+  .preset-check::after {
     content: "";
     width: 4px; height: 8px;
     border: solid currentColor;
@@ -492,104 +521,21 @@
     transform: rotate(45deg) translate(-1px, -1px);
   }
 
-  /* ---------- file pill in header ---------- */
-  .file-pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 5px 10px 5px 8px;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: 999px;
-    font-size: 11.5px;
+  /* ---------- Tools tab ---------- */
+  .panel-hint {
+    font-size: 12px;
     color: var(--ink-dim);
-    max-width: 240px;
-  }
-  .file-pill .file-icon {
-    width: 12px; height: 14px;
-    border: 1px solid currentColor;
-    border-radius: 1px;
-    position: relative;
-    flex-shrink: 0;
-  }
-  .file-pill .file-icon::after {
-    content: "";
-    position: absolute;
-    top: -1px; right: -1px;
-    width: 4px; height: 4px;
-    border-left: 1px solid currentColor;
-    border-bottom: 1px solid currentColor;
-    background: var(--bg);
-  }
-  .file-pill .file-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .file-pill .file-dim {
-    color: var(--muted);
-    font-family: "SF Mono", "JetBrains Mono", monospace;
-    font-size: 10.5px;
+    line-height: 1.5;
+    margin: 0;
   }
 
-  /* drag overlay */
-  #dragOverlay {
-    position: fixed; inset: 0; z-index: 1000;
-    background: rgba(11, 11, 15, 0.85);
-    backdrop-filter: blur(10px);
-    display: none;
-    align-items: center; justify-content: center;
-    pointer-events: none;
-    color: var(--ink);
-  }
-  #dragOverlay.show { display: flex; }
-  #dragOverlay .label {
-    border: 2px dashed var(--accent);
-    border-radius: 14px;
-    padding: 48px 80px;
-    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
-    font-size: 24px;
-    letter-spacing: -0.01em;
-  }
-
-  /* toast / status pill */
-  #toast {
-    position: fixed;
-    top: 18px;
-    left: 50%;
-    transform: translate(-50%, -160%);
-    background: rgba(20,20,25,0.94);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--accent);
-    color: var(--ink);
-    padding: 9px 18px;
-    border-radius: 999px;
-    font-size: 12.5px;
-    letter-spacing: 0.01em;
-    z-index: 2000;
-    pointer-events: none;
-    transition: transform 0.25s ease, opacity 0.25s ease;
-    opacity: 0;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    display: inline-flex; align-items: center; gap: 10px;
-  }
-  #toast.show { transform: translate(-50%, 0); opacity: 1; }
-  #toast .spinner {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    border: 1.5px solid var(--hairline-strong);
-    border-top-color: var(--accent);
-    animation: spin 0.7s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ---------- edit toolbar ---------- */
   .edit-toolbar {
-    display: inline-flex;
+    display: flex;
     gap: 4px;
     padding: 4px;
-    background: var(--surface);
+    background: var(--surface-2);
     border: 1px solid var(--hairline);
     border-radius: 999px;
-    align-self: center;
   }
   .edit-tool {
     appearance: none;
@@ -597,17 +543,185 @@
     color: var(--ink-dim);
     border: none;
     border-radius: 999px;
-    padding: 6px 14px;
+    padding: 8px 12px;
     font: inherit;
     font-size: 12px;
     letter-spacing: 0.02em;
     cursor: pointer;
-    display: inline-flex; align-items: center; gap: 6px;
-    transition: background 0.15s ease, color 0.15s ease;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    transition: background 0.15s, color 0.15s;
+    flex: 1;
   }
-  .edit-tool:hover { background: var(--surface-2); color: var(--ink); }
+  .edit-tool:hover { background: rgba(255,240,220,0.05); color: var(--ink); }
   .edit-tool.is-active { background: var(--accent); color: #1a1208; }
   .edit-tool svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  .edit-panel {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+  }
+  .edit-panel.show { display: flex; }
+  .edit-panel-label {
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .edit-panel-content { display: none; flex-direction: column; gap: 12px; }
+  .edit-panel-content:not([hidden]) { display: flex; }
+  .edit-panel-content .hint {
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  .slider-row {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .slider-row input[type="range"] {
+    appearance: none;
+    flex: 1;
+    height: 2px;
+    background: var(--hairline-strong);
+    border-radius: 1px;
+    outline: none;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    cursor: grab;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb:active { cursor: grabbing; }
+  .slider-row .readout {
+    font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+    font-size: 11.5px;
+    color: var(--ink);
+    min-width: 48px;
+    text-align: right;
+  }
+
+  .seg {
+    display: inline-flex;
+    align-self: flex-start;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .seg button {
+    appearance: none;
+    background: transparent;
+    color: var(--ink-dim);
+    border: none;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .seg button:hover { background: rgba(255,240,220,0.05); color: var(--ink); }
+  .seg button + button { border-left: 1px solid var(--hairline-strong); }
+
+  .edit-panel-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+    margin-top: 4px;
+  }
+
+  /* ---------- Export tab ---------- */
+  .export-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+  }
+  .export-count {
+    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
+    font-size: 18px;
+    margin: 0;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+  .export-count .num { color: var(--accent); font-weight: 500; }
+  .export-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    min-height: 0;
+    margin: 0 -2px;
+    padding: 0 2px 2px;
+  }
+  .export-empty {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    padding: 28px 16px;
+    border: 1px dashed var(--hairline-strong);
+    border-radius: 8px;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .export-item {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+  }
+  .export-item .thumb {
+    width: 40px;
+    aspect-ratio: var(--thumb-aspect, 3/2);
+    border-radius: 4px;
+    overflow: hidden;
+    background: #000;
+  }
+  .export-item .thumb canvas {
+    width: 100%; height: 100%; display: block;
+  }
+  .export-item-title {
+    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  .export-item-remove {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 18px;
+    line-height: 1;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .export-item-remove:hover { color: var(--danger); background: rgba(217, 119, 87, 0.1); }
+
+  .export-actions {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--hairline);
+  }
+  .export-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
 
   /* ---------- edit overlays inside hero ---------- */
   .hero .canvas-edit-preview {
@@ -708,94 +822,114 @@
     cursor: ns-resize;
   }
 
-  /* edit panel below hero */
-  .edit-panel {
-    display: none;
-    align-items: center;
-    gap: 14px;
-    width: var(--hero-w, min(1100px, calc(100vw - 56px)));
-    margin-top: 10px;
-    padding: 12px 16px;
+  /* ---------- file pill in header ---------- */
+  .file-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 10px 5px 8px;
     background: var(--surface);
     border: 1px solid var(--hairline);
-    border-radius: 12px;
-  }
-  .edit-panel.show { display: flex; }
-  .edit-panel-label {
-    font-size: 10.5px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--ink-dim);
-    min-width: 88px;
-  }
-  .edit-panel-content {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-  }
-  .edit-panel-content[hidden] { display: none; }
-  .edit-panel-content .hint {
-    font-size: 12px;
-    color: var(--ink-dim);
-    letter-spacing: 0.02em;
-  }
-  .edit-panel-content input[type="range"] {
-    flex: 1;
-    appearance: none;
-    height: 2px;
-    background: var(--hairline-strong);
-    border-radius: 1px;
-    outline: none;
-    cursor: pointer;
-    min-width: 160px;
-  }
-  .edit-panel-content input[type="range"]::-webkit-slider-thumb {
-    appearance: none;
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--bg);
-    cursor: grab;
-  }
-  .edit-panel-content input[type="range"]::-webkit-slider-thumb:active { cursor: grabbing; }
-  .edit-panel-content .readout {
-    font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
-    font-size: 11.5px;
-    color: var(--ink);
-    min-width: 56px;
-    text-align: right;
-  }
-  .edit-panel-content .seg {
-    display: inline-flex;
-    border: 1px solid var(--hairline-strong);
     border-radius: 999px;
-    overflow: hidden;
-  }
-  .edit-panel-content .seg button {
-    appearance: none;
-    background: transparent;
+    font-size: 11.5px;
     color: var(--ink-dim);
-    border: none;
-    padding: 6px 10px;
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background 0.12s ease, color 0.12s ease;
+    max-width: 240px;
   }
-  .edit-panel-content .seg button:hover { background: var(--surface-2); color: var(--ink); }
-  .edit-panel-content .seg button + button { border-left: 1px solid var(--hairline-strong); }
-  .edit-panel-actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
+  .file-pill .file-icon {
+    width: 12px; height: 14px;
+    border: 1px solid currentColor;
+    border-radius: 1px;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .file-pill .file-icon::after {
+    content: "";
+    position: absolute;
+    top: -1px; right: -1px;
+    width: 4px; height: 4px;
+    border-left: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    background: var(--bg);
+  }
+  .file-pill .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .file-pill .file-dim {
+    color: var(--muted);
+    font-family: "SF Mono", "JetBrains Mono", monospace;
+    font-size: 10.5px;
+  }
 
+  /* drag overlay */
+  #dragOverlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(11, 11, 15, 0.85);
+    backdrop-filter: blur(10px);
+    display: none;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+    color: var(--ink);
+  }
+  #dragOverlay.show { display: flex; }
+  #dragOverlay .label {
+    border: 2px dashed var(--accent);
+    border-radius: 14px;
+    padding: 48px 80px;
+    font-family: "Charter", "Iowan Old Style", "Georgia", serif;
+    font-size: 24px;
+    letter-spacing: -0.01em;
+  }
+
+  /* toast / status pill */
+  #toast {
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translate(-50%, -160%);
+    background: rgba(20,20,25,0.94);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--accent);
+    color: var(--ink);
+    padding: 9px 18px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    letter-spacing: 0.01em;
+    z-index: 2000;
+    pointer-events: none;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    opacity: 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  #toast.show { transform: translate(-50%, 0); opacity: 1; }
+  #toast .spinner {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid var(--hairline-strong);
+    border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Responsive — stack on narrow screens */
+  @media (max-width: 900px) {
+    :root { --sidebar-w: 320px; }
+  }
+  @media (max-width: 760px) {
+    #workspace { height: auto; }
+    .layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: 55vh auto;
+      height: auto;
+      gap: 16px;
+      padding: 16px;
+    }
+    .preview-pane { min-height: 0; }
+    .sidebar { min-height: 60vh; }
+  }
   @media (max-width: 720px) {
     header { padding: 12px 16px; gap: 10px; }
     .brand-sub, .head-meta { display: none; }
-    .hero-wrap { padding: 16px 16px 0; }
-    .hero, .hero-meta { width: 100%; }
-    .hero-meta { grid-template-columns: 1fr; gap: 18px; }
-    .strip-wrap { padding: 16px 16px 24px; }
-    .frame { width: 160px; }
   }
 </style>
 </head>
@@ -818,10 +952,6 @@
       <span>Change photo</span>
       <input type="file" id="file" accept="image/*,.cr2,.cr3,.nef,.arw,.dng,.raf,.orf,.rw2,.pef,.srw,.crw,.x3f,.nrw,.3fr">
     </label>
-    <button class="btn" id="selectAllBtn" disabled>Select all <span class="kbd">A</span></button>
-    <button class="btn btn-primary" id="downloadBtn" disabled>
-      <span id="downloadLabel">Export</span>
-    </button>
   </div>
 </header>
 
@@ -841,101 +971,125 @@
 </section>
 
 <section id="workspace">
-  <div class="hero-wrap">
-    <div class="edit-toolbar" id="editToolbar">
-      <button class="edit-tool" data-tool="crop">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 1v11h11M1 4h11v11"/></svg>
-        Crop
-      </button>
-      <button class="edit-tool" data-tool="rotate">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 8a5.5 5.5 0 1 1-1.86-4.12"/><path d="M13.5 1.5v3h-3"/></svg>
-        Rotate
-      </button>
-      <button class="edit-tool" data-tool="perspective">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 2.5l10 1.5v8L3 13.5z"/></svg>
-        Perspective
-      </button>
-    </div>
-    <div class="hero" id="hero">
-      <canvas class="canvas-original" id="heroOrigCanvas"></canvas>
-      <canvas class="canvas-filtered" id="heroFilteredCanvas"></canvas>
-      <canvas class="canvas-edit-preview" id="heroEditPreview"></canvas>
-      <div class="hero-tag left" id="heroTagLeft">—</div>
-      <div class="hero-tag right">Original</div>
-      <div class="scrubber"></div>
-      <div class="scrubber-handle" id="scrubberHandle" title="Drag to compare"></div>
+  <div class="layout">
+    <div class="preview-pane" id="previewPane">
+      <div class="hero" id="hero">
+        <canvas class="canvas-original" id="heroOrigCanvas"></canvas>
+        <canvas class="canvas-filtered" id="heroFilteredCanvas"></canvas>
+        <canvas class="canvas-edit-preview" id="heroEditPreview"></canvas>
+        <div class="hero-tag left" id="heroTagLeft">—</div>
+        <div class="hero-tag right">Original</div>
+        <div class="scrubber"></div>
+        <div class="scrubber-handle" id="scrubberHandle" title="Drag to compare"></div>
 
-      <div class="edit-overlay crop-overlay" id="cropOverlay">
-        <div class="crop-frame" id="cropFrame">
-          <div class="crop-handle nw" data-handle="nw"></div>
-          <div class="crop-handle n"  data-handle="n"></div>
-          <div class="crop-handle ne" data-handle="ne"></div>
-          <div class="crop-handle e"  data-handle="e"></div>
-          <div class="crop-handle se" data-handle="se"></div>
-          <div class="crop-handle s"  data-handle="s"></div>
-          <div class="crop-handle sw" data-handle="sw"></div>
-          <div class="crop-handle w"  data-handle="w"></div>
+        <div class="edit-overlay crop-overlay" id="cropOverlay">
+          <div class="crop-frame" id="cropFrame">
+            <div class="crop-handle nw" data-handle="nw"></div>
+            <div class="crop-handle n"  data-handle="n"></div>
+            <div class="crop-handle ne" data-handle="ne"></div>
+            <div class="crop-handle e"  data-handle="e"></div>
+            <div class="crop-handle se" data-handle="se"></div>
+            <div class="crop-handle s"  data-handle="s"></div>
+            <div class="crop-handle sw" data-handle="sw"></div>
+            <div class="crop-handle w"  data-handle="w"></div>
+          </div>
+        </div>
+        <div class="edit-overlay rotate-overlay">
+          <div class="rotate-surface" id="rotateSurface"></div>
+          <div class="rotate-readout-bubble" id="rotateBubble">0.0°</div>
+        </div>
+        <div class="edit-overlay perspective-overlay">
+          <div class="perspective-surface" id="perspectiveSurface"></div>
         </div>
       </div>
-      <div class="edit-overlay rotate-overlay">
-        <div class="rotate-surface" id="rotateSurface"></div>
-        <div class="rotate-readout-bubble" id="rotateBubble">0.0°</div>
-      </div>
-      <div class="edit-overlay perspective-overlay">
-        <div class="perspective-surface" id="perspectiveSurface"></div>
-      </div>
     </div>
 
-    <div class="hero-meta">
-      <div>
-        <h2 class="stock-name" id="stockName">—</h2>
-        <p class="stock-blurb" id="stockBlurb">—</p>
-      </div>
-      <div class="hero-controls">
-        <div class="intensity">
-          <span>Intensity</span>
+    <aside class="sidebar">
+      <nav class="tabs" id="tabs">
+        <button class="tab is-active" data-tab="filters" type="button">Filters</button>
+        <button class="tab" data-tab="tools" type="button">Tools</button>
+        <button class="tab" data-tab="export" type="button">Export</button>
+      </nav>
+
+      <div class="tab-panel" data-panel="filters">
+        <div class="stock-head">
+          <h2 class="stock-name" id="stockName">—</h2>
+          <p class="stock-blurb" id="stockBlurb">—</p>
+        </div>
+        <div class="intensity-row">
+          <span class="label">Intensity</span>
           <input type="range" id="intensity" min="0" max="100" value="100">
-          <span class="intensity-val mono" id="intensityVal">100%</span>
+          <span class="readout mono" id="intensityVal">100%</span>
         </div>
-        <button class="select-btn" id="selectBtn">
-          <span class="star"></span>
-          <span id="selectBtnLabel">Add to export</span>
-        </button>
+        <div class="section-label">
+          <span>Film stocks</span>
+          <span>Click ✓ to add</span>
+        </div>
+        <div class="preset-list" id="presetList"></div>
       </div>
-    </div>
 
-    <div class="edit-panel" id="editPanel">
-      <span class="edit-panel-label" id="editPanelLabel">Crop</span>
-      <div class="edit-panel-content" data-tool="crop" id="cropPanel">
-        <span class="hint">Drag the frame or its handles to adjust. Click <strong>Apply</strong> to commit.</span>
-      </div>
-      <div class="edit-panel-content" data-tool="rotate" id="rotatePanel" hidden>
-        <span class="hint" style="min-width:0">Drag the image, or use the slider:</span>
-        <input type="range" id="rotateSlider" min="-45" max="45" step="0.1" value="0">
-        <span class="readout" id="rotateReadout">0.0°</span>
-        <div class="seg">
-          <button id="rotate90L" title="Rotate 90° left">⟲ 90°</button>
-          <button id="rotate90R" title="Rotate 90° right">⟳ 90°</button>
+      <div class="tab-panel" data-panel="tools" hidden>
+        <p class="panel-hint">Crop, straighten, or correct keystone before applying a filter. Edits are baked into the source image.</p>
+        <div class="edit-toolbar" id="editToolbar">
+          <button class="edit-tool" data-tool="crop" type="button">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 1v11h11M1 4h11v11"/></svg>
+            Crop
+          </button>
+          <button class="edit-tool" data-tool="rotate" type="button">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 8a5.5 5.5 0 1 1-1.86-4.12"/><path d="M13.5 1.5v3h-3"/></svg>
+            Rotate
+          </button>
+          <button class="edit-tool" data-tool="perspective" type="button">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 2.5l10 1.5v8L3 13.5z"/></svg>
+            Perspective
+          </button>
+        </div>
+
+        <div class="edit-panel" id="editPanel">
+          <span class="edit-panel-label" id="editPanelLabel">Crop</span>
+          <div class="edit-panel-content" data-tool="crop" id="cropPanel">
+            <p class="hint">Drag the frame or its handles on the preview to adjust.</p>
+          </div>
+          <div class="edit-panel-content" data-tool="rotate" id="rotatePanel" hidden>
+            <p class="hint">Drag the image or use the slider for fine tuning. Use the buttons for quarter turns.</p>
+            <div class="slider-row">
+              <input type="range" id="rotateSlider" min="-45" max="45" step="0.1" value="0">
+              <span class="readout" id="rotateReadout">0.0°</span>
+            </div>
+            <div class="seg">
+              <button id="rotate90L" type="button" title="Rotate 90° left">⟲ 90°</button>
+              <button id="rotate90R" type="button" title="Rotate 90° right">⟳ 90°</button>
+            </div>
+          </div>
+          <div class="edit-panel-content" data-tool="perspective" id="perspectivePanel" hidden>
+            <p class="hint">Tilt forward or backward to correct vertical keystone.</p>
+            <div class="slider-row">
+              <input type="range" id="perspectiveSlider" min="-50" max="50" step="1" value="0">
+              <span class="readout" id="perspectiveReadout">0</span>
+            </div>
+          </div>
+          <div class="edit-panel-actions">
+            <button class="btn" id="editCancelBtn" type="button">Cancel</button>
+            <button class="btn btn-primary" id="editApplyBtn" type="button">Apply</button>
+          </div>
         </div>
       </div>
-      <div class="edit-panel-content" data-tool="perspective" id="perspectivePanel" hidden>
-        <span class="hint" style="min-width:0">Tilt forward / backward:</span>
-        <input type="range" id="perspectiveSlider" min="-50" max="50" step="1" value="0">
-        <span class="readout" id="perspectiveReadout">0</span>
-      </div>
-      <div class="edit-panel-actions">
-        <button class="btn" id="editCancelBtn">Cancel</button>
-        <button class="btn btn-primary" id="editApplyBtn">Apply</button>
-      </div>
-    </div>
-  </div>
 
-  <div class="strip-wrap">
-    <div class="strip-label">
-      <span>Contact sheet</span>
-      <span class="strip-count" id="stripCount">0 selected</span>
-    </div>
-    <div class="strip" id="strip"></div>
+      <div class="tab-panel" data-panel="export" hidden>
+        <div class="export-head">
+          <p class="export-count"><span class="num" id="exportCount">0</span> selected</p>
+          <button class="btn" id="selectAllBtn" type="button" disabled>Select all <span class="kbd">A</span></button>
+        </div>
+        <div class="export-list" id="exportList">
+          <p class="export-empty">Add filters from the <strong>Filters</strong> tab to include them in your export.</p>
+        </div>
+        <div class="export-actions">
+          <button class="btn btn-primary export-btn" id="downloadBtn" type="button" disabled>
+            <span id="downloadLabel">Export</span>
+          </button>
+        </div>
+      </div>
+    </aside>
   </div>
 </section>
 
@@ -1275,6 +1429,7 @@ const changeBtn     = $("changeBtn");
 const headMeta      = $("headMeta");
 const fileName      = $("fileName");
 const fileDim       = $("fileDim");
+const previewPane   = $("previewPane");
 const heroEl        = $("hero");
 const heroOrig      = $("heroOrigCanvas");
 const heroFiltered  = $("heroFilteredCanvas");
@@ -1284,14 +1439,14 @@ const stockName     = $("stockName");
 const stockBlurb    = $("stockBlurb");
 const intensityInp  = $("intensity");
 const intensityVal  = $("intensityVal");
-const selectBtn     = $("selectBtn");
-const selectBtnLabel= $("selectBtnLabel");
-const stripEl       = $("strip");
-const stripCount    = $("stripCount");
+const presetListEl  = $("presetList");
+const exportListEl  = $("exportList");
+const exportCount   = $("exportCount");
 const selectAllBtn  = $("selectAllBtn");
 const downloadBtn   = $("downloadBtn");
 const downloadLabel = $("downloadLabel");
 const dragOverlay   = $("dragOverlay");
+const tabsEl        = $("tabs");
 
 const editToolbar     = $("editToolbar");
 const editPanel       = $("editPanel");
@@ -1466,8 +1621,9 @@ function rebuildFromSource() {
   state.heroH = hero.h;
   state.heroCache.clear();
   fileDim.textContent = `${src.width}×${src.height}`;
-  sizeViewport();
-  buildStrip();
+  buildPresetList();
+  // Defer sizing until after the new DOM lays out.
+  requestAnimationFrame(sizeViewport);
 }
 
 function setCanvasFromImageData(canvas, imgData, w, h) {
@@ -1478,29 +1634,25 @@ function setCanvasFromImageData(canvas, imgData, w, h) {
 
 function nextFrame() { return new Promise(r => requestAnimationFrame(r)); }
 
-// Fit hero + filmstrip into one viewport given the photo's aspect ratio.
+// Fit hero into the preview pane given the photo's aspect ratio.
+// Reserves enough room for both portrait and landscape orientations.
 function sizeViewport() {
   if (!state.sourceCanvas) return;
+  if (!previewPane.clientWidth || !previewPane.clientHeight) {
+    // Layout not ready yet — try again next frame.
+    requestAnimationFrame(sizeViewport);
+    return;
+  }
   const aspect = state.sourceCanvas.width / state.sourceCanvas.height;
-
-  // Frame width adapts to orientation so portraits don't make the strip tall.
-  const frameW = aspect >= 1 ? 180 : 120;
-  const frameH = frameW / aspect;
-  // Strip vertical footprint: border + top padding + label + frame + meta + bottom padding.
-  const stripH = 1 + 12 + 10 + 16 + frameH + 36 + 18 + 8 /* scrollbar */;
-  // Reserve for: header + hero-wrap top pad + gap + meta + strip + tail buffer.
-  const reserved = 56 + 20 + 14 + 78 + stripH + 8;
-  const maxH = Math.max(220, window.innerHeight - reserved);
-  const maxW = Math.min(1100, window.innerWidth - 56);
-
+  const padX = 16, padY = 16;
+  const maxW = Math.max(120, previewPane.clientWidth - padX);
+  const maxH = Math.max(120, previewPane.clientHeight - padY);
   let w = maxW;
   let h = w / aspect;
   if (h > maxH) { h = maxH; w = h * aspect; }
   w = Math.round(w); h = Math.round(h);
-
   document.documentElement.style.setProperty("--hero-w", `${w}px`);
   document.documentElement.style.setProperty("--hero-h", `${h}px`);
-  document.documentElement.style.setProperty("--frame-w", `${frameW}px`);
 }
 
 let _resizeRaf = 0;
@@ -1552,7 +1704,7 @@ async function loadFromFile(file) {
   state.selected.clear();
   updateSelectionUI();
 
-  // Build thumb/hero, size viewport, build strip.
+  // Build thumb/hero, size viewport, build preset list.
   rebuildFromSource();
 
   // Keep current active preset across photo changes; else first key.
@@ -1571,16 +1723,14 @@ async function setActive(presetName) {
   stockBlurb.textContent = preset.blurb;
   heroTagLeft.textContent = preset.title;
 
-  document.querySelectorAll(".frame").forEach(f => {
-    f.classList.toggle("is-active", f.dataset.preset === presetName);
+  document.querySelectorAll(".preset-row").forEach(r => {
+    r.classList.toggle("is-active", r.dataset.preset === presetName);
   });
-  // Scroll active into view in the strip.
-  const activeFrame = stripEl.querySelector(`[data-preset="${presetName}"]`);
-  if (activeFrame) {
-    activeFrame.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  // Keep the active row in view in the preset list.
+  const activeRow = presetListEl.querySelector(`[data-preset="${presetName}"]`);
+  if (activeRow) {
+    activeRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
-
-  updateSelectBtn();
 
   // Draw original immediately.
   setCanvasFromImageData(heroOrig, state.heroData, state.heroW, state.heroH);
@@ -1597,47 +1747,52 @@ async function setActive(presetName) {
   setCanvasFromImageData(heroFiltered, filtered, state.heroW, state.heroH);
 }
 
-// ---------- Strip ----------
-function buildStrip() {
-  stripEl.innerHTML = "";
+// ---------- Preset list (Filters tab) ----------
+function buildPresetList() {
+  presetListEl.innerHTML = "";
   const names = Object.keys(PRESETS);
+  const thumbAspect = state.thumbW && state.thumbH
+    ? `${state.thumbW} / ${state.thumbH}`
+    : "3 / 2";
+  document.documentElement.style.setProperty("--thumb-aspect", thumbAspect);
+
   for (const name of names) {
     const preset = PRESETS[name];
-    const frame = document.createElement("div");
-    frame.className = "frame";
-    frame.dataset.preset = name;
-    frame.innerHTML = `
-      <canvas class="loading" width="${state.thumbW}" height="${state.thumbH}"></canvas>
-      <div class="frame-meta">
-        <p class="frame-name">${preset.title}</p>
-        <p class="frame-blurb">${preset.blurb}</p>
+    const row = document.createElement("div");
+    row.className = "preset-row";
+    row.dataset.preset = name;
+    row.innerHTML = `
+      <div class="thumb"><canvas class="loading" width="${state.thumbW}" height="${state.thumbH}"></canvas></div>
+      <div class="info">
+        <p class="info-title">${preset.title}</p>
+        <p class="info-blurb">${preset.blurb}</p>
       </div>
-      <div class="frame-check" title="Add to export"></div>
+      <button class="preset-check" type="button" title="Add to export" aria-label="Add ${preset.title} to export"></button>
     `;
-    frame.addEventListener("click", (e) => {
-      // Click on check toggles selection without changing active.
-      if (e.target.classList.contains("frame-check")) {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".preset-check")) {
         e.stopPropagation();
         toggleSelected(name);
         return;
       }
       setActive(name);
     });
-    stripEl.appendChild(frame);
+    presetListEl.appendChild(row);
   }
-  // Progressive thumb rendering.
+  // Progressive thumb rendering so the panel stays responsive.
   (async () => {
     for (const name of names) {
       await nextFrame();
-      const frame = stripEl.querySelector(`[data-preset="${name}"]`);
-      if (!frame) continue;
-      const canvas = frame.querySelector("canvas");
+      const row = presetListEl.querySelector(`[data-preset="${name}"]`);
+      if (!row) continue;
+      const canvas = row.querySelector("canvas");
       const ctx = canvas.getContext("2d");
       const out = applyPreset(state.thumbData, name, state.thumbW, state.thumbH);
       ctx.putImageData(out, 0, 0);
       canvas.classList.remove("loading");
     }
   })();
+  updateSelectionUI();
 }
 
 // ---------- Selection ----------
@@ -1648,29 +1803,56 @@ function toggleSelected(name) {
 }
 
 function updateSelectionUI() {
-  document.querySelectorAll(".frame").forEach(f => {
-    f.classList.toggle("is-selected", state.selected.has(f.dataset.preset));
+  document.querySelectorAll(".preset-row").forEach(r => {
+    r.classList.toggle("is-selected", state.selected.has(r.dataset.preset));
   });
   const n = state.selected.size;
-  stripCount.textContent = `${n} selected`;
+  exportCount.textContent = n;
   downloadBtn.disabled = n === 0;
-  downloadLabel.textContent = n === 0 ? "Export" : (n === 1 ? "Export 1" : `Export ${n}`);
-  selectAllBtn.textContent = n === Object.keys(PRESETS).length
+  downloadLabel.textContent = n === 0
+    ? "Export"
+    : (n === 1 ? "Export 1 preset" : `Export ${n} presets`);
+  selectAllBtn.textContent = (n === Object.keys(PRESETS).length)
     ? "Clear all"
     : "Select all";
-  updateSelectBtn();
+  rebuildExportList();
 }
 
-function updateSelectBtn() {
-  const isSelected = state.selected.has(state.active);
-  selectBtn.classList.toggle("is-selected", isSelected);
-  selectBtnLabel.textContent = isSelected ? "Added to export" : "Add to export";
+function rebuildExportList() {
+  const ordered = Object.keys(PRESETS).filter(n => state.selected.has(n));
+  exportListEl.innerHTML = "";
+  if (ordered.length === 0) {
+    const p = document.createElement("p");
+    p.className = "export-empty";
+    p.innerHTML = "Add filters from the <strong>Filters</strong> tab to include them in your export.";
+    exportListEl.appendChild(p);
+    return;
+  }
+  for (const name of ordered) {
+    const item = document.createElement("div");
+    item.className = "export-item";
+    item.innerHTML = `
+      <div class="thumb"></div>
+      <span class="export-item-title">${PRESETS[name].title}</span>
+      <button class="export-item-remove" type="button" title="Remove" aria-label="Remove ${PRESETS[name].title}">×</button>
+    `;
+    // Reuse the thumbnail render so the export list shows the same preview.
+    const thumbEl = item.querySelector(".thumb");
+    if (state.thumbData) {
+      const c = document.createElement("canvas");
+      c.width = state.thumbW; c.height = state.thumbH;
+      c.getContext("2d").putImageData(
+        applyPreset(state.thumbData, name, state.thumbW, state.thumbH), 0, 0
+      );
+      thumbEl.appendChild(c);
+    }
+    item.querySelector(".export-item-remove").addEventListener("click", () => {
+      state.selected.delete(name);
+      updateSelectionUI();
+    });
+    exportListEl.appendChild(item);
+  }
 }
-
-selectBtn.addEventListener("click", () => {
-  if (!state.active) return;
-  toggleSelected(state.active);
-});
 
 selectAllBtn.addEventListener("click", () => {
   const all = Object.keys(PRESETS);
@@ -1678,6 +1860,21 @@ selectAllBtn.addEventListener("click", () => {
   state.selected.clear();
   if (!allSelected) all.forEach(n => state.selected.add(n));
   updateSelectionUI();
+});
+
+// ---------- Tabs ----------
+function activateTab(name) {
+  document.querySelectorAll(".tab").forEach(t => {
+    t.classList.toggle("is-active", t.dataset.tab === name);
+  });
+  document.querySelectorAll(".tab-panel").forEach(p => {
+    p.hidden = p.dataset.panel !== name;
+  });
+}
+tabsEl.addEventListener("click", (e) => {
+  const btn = e.target.closest(".tab");
+  if (!btn) return;
+  activateTab(btn.dataset.tab);
 });
 
 // ---------- Intensity + scrubber ----------
@@ -2081,6 +2278,9 @@ function enterEditMode(tool) {
   if (state.editMode === tool) { exitEditMode(false); return; }
   if (state.editMode) exitEditMode(false);
   state.editMode = tool;
+
+  // Ensure the user can see the apply/cancel controls.
+  activateTab("tools");
 
   editToolbar.querySelectorAll(".edit-tool").forEach(b => {
     b.classList.toggle("is-active", b.dataset.tool === tool);
