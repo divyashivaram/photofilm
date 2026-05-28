@@ -122,6 +122,26 @@ const PRESETS_LIST = [
       ["grain",              { amount: 0.35 }],
     ],
   },
+  {
+    // Imported from 20160910-DSC06091.xmp. Best-effort: matte tone curves,
+    // mild WB warmth, global desat, RGB-channel sat shift, grain. Lightroom
+    // exposure/highlights/shadows/whites/blacks/clarity, vibrance, HSL hue+
+    // lum shifts, and sharpen don't have preset-op equivalents yet — see
+    // CLAUDE.md TODO #3 Phase 2.
+    id: "vintage-mute", name: "VINTAGE MUTE", sub: "FADED",
+    blurb: "Matte-lifted shadows, muted palette, warm tint. Imported from XMP.",
+    ops: [
+      ["white_balance",      { temp: 0.03, tint: 0.05 }],
+      ["contrast",           { amount: 0.06 }],
+      ["tone_curve",         { points: [[0, 0.1529], [0.1451, 0.1804], [0.3216, 0.3059], [0.7137, 0.7294], [1.0, 0.9647]] }],
+      ["tone_curve",         { points: [[0, 0], [0.2000, 0.1176], [0.5020, 0.5059], [0.6784, 0.7451], [1.0, 1.0]], channel: "r" }],
+      ["tone_curve",         { points: [[0, 0], [0.2000, 0.1176], [0.5020, 0.5020], [0.7098, 0.7843], [1.0, 1.0]], channel: "g" }],
+      ["tone_curve",         { points: [[0, 0], [0.1804, 0.0824], [0.4824, 0.4706], [0.7216, 0.7843], [1.0, 1.0]], channel: "b" }],
+      ["saturation",         { amount: -0.28 }],
+      ["channel_saturation", { reds: 0.02, greens: -0.20, blues: -0.40 }],
+      ["grain",              { amount: 0.50 }],
+    ],
+  },
 ];
 
 const PRESETS = Object.fromEntries(PRESETS_LIST.map((p) => [p.id, p]));
