@@ -17,10 +17,6 @@ const IMG_EXT = /\.(jpe?g|png|gif|bmp|tiff?|webp|heic|heif|avif)$/i;
 const THUMB_MAX = 280;
 const HERO_MAX  = 1200;
 
-// Demo photo used until the user drops / pastes / picks one of their own.
-const DEMO_PHOTO          = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=1600&q=80";
-const DEMO_PHOTO_FALLBACK = "https://picsum.photos/seed/photofilm/1600/1000";
-
 // ============================================================================
 // PRESETS — ops chains ported from viewer.html (which in turn mirror
 // photofilm/presets.py).
@@ -1229,12 +1225,11 @@ function Slider({ label, value, unit = "", min = -100, max = 100, color = "#fff"
   );
 }
 
-// ---------- FilteredPhoto: renders a presetId applied to either a source
-// ImageData (real pipeline) or a URL with CSS filter fallback (used by stub
-// UI elements that don't have a sourceCanvas yet). Memoizes via a per-photo
-// cache keyed by presetId so the same thumb isn't recomputed on every render.
+// ---------- FilteredPhoto: renders a presetId applied to a source ImageData.
+// Memoizes via a per-photo cache keyed by presetId so the same thumb isn't
+// recomputed on every render. Callers must guard on truthy sourceData.
 // --------------------------------------------------------------------------
-function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensity = 1, userAdjust, style = {}, className = "", objectFit = "contain", fallbackUrl = DEMO_PHOTO, fallbackFilter = "" }) {
+function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensity = 1, userAdjust, style = {}, className = "", objectFit = "contain" }) {
   const canvasRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -1273,20 +1268,8 @@ function FilteredPhoto({ sourceData, sourceW, sourceH, cache, presetId, intensit
 
   return (
     <div className={className} style={{ position: "relative", overflow: "hidden", background: "#111", ...style }}>
-      {sourceData ? (
-        <>
-          <OriginalCanvas sourceData={sourceData} sourceW={sourceW} sourceH={sourceH} style={canvasStyle} />
-          <canvas ref={canvasRef} style={{ ...canvasStyle, opacity: intensity }} />
-        </>
-      ) : (
-        <img
-          src={fallbackUrl}
-          alt=""
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit, filter: fallbackFilter, display: "block" }}
-          onError={(e) => { e.currentTarget.src = DEMO_PHOTO_FALLBACK; }}
-          draggable="false"
-        />
-      )}
+      <OriginalCanvas sourceData={sourceData} sourceW={sourceW} sourceH={sourceH} style={canvasStyle} />
+      <canvas ref={canvasRef} style={{ ...canvasStyle, opacity: intensity }} />
     </div>
   );
 }
@@ -1324,7 +1307,6 @@ function serializeUserEdits({ baselinePreset, intensity, sourceName, userAdjust 
 Object.assign(window, {
   // file-format
   RAW_EXT, IMG_EXT, THUMB_MAX, HERO_MAX,
-  DEMO_PHOTO, DEMO_PHOTO_FALLBACK,
   // presets
   PRESETS, PRESETS_LIST, PRESET_IDS, FILM_CURVE,
   serializeUserEdits,

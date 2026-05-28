@@ -141,12 +141,10 @@ same op vocabulary so presets stay portable. When adding a new op, add it in
 both places with identical signatures and identical math. Test by exporting
 the same photo via CLI and browser and diffing.
 
-## Demo photo
+## Empty state
 
-Boot loads `https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?...`
-into the source canvas so the app is usable before the user supplies a file.
-Falls back to `https://picsum.photos/seed/photofilm/1600/1000`. Offline mode
-shows an empty viewport with a "drop a photo here" hint.
+Boot starts with no image loaded. The viewport shows a "DROP A PHOTO HERE ·
+OR CLICK OPEN" placeholder until the user drops / pastes / picks a file.
 
 ## Files no longer used by index.html
 

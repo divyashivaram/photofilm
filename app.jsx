@@ -11,7 +11,7 @@ const PhotofilmContext = React.createContext(null);
 const usePhotofilm = () => React.useContext(PhotofilmContext);
 
 // ----------------------------------------------------------------------------
-// PhotofilmProvider — owns app state. Loads the demo photo on first mount;
+// PhotofilmProvider — owns app state. Starts empty;
 // drag/paste/picker swap it out for the user's own image.
 // ----------------------------------------------------------------------------
 function PhotofilmProvider({ children }) {
@@ -93,32 +93,6 @@ function PhotofilmProvider({ children }) {
     heroCacheRef.current  = new Map();
     setCacheGen((g) => g + 1);
   }, [sourceCanvas]);
-
-  // Boot: pull the demo Unsplash photo through the pipeline so the rest of
-  // the app has exactly one rendering code path. Falls back silently if the
-  // network is offline — the viewport just stays empty until the user drops
-  // a photo.
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const tryUrls = [DEMO_PHOTO, DEMO_PHOTO_FALLBACK];
-        for (const url of tryUrls) {
-          try {
-            const res = await fetch(url, { mode: "cors" });
-            if (!res.ok) continue;
-            const blob = await res.blob();
-            if (cancelled) return;
-            const c = await loadOrientedCanvas(blob);
-            if (cancelled) return;
-            setSourceCanvas(c);
-            return;
-          } catch (_) { /* try next */ }
-        }
-      } catch (e) { console.warn("[photofilm] demo photo unavailable:", e); }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   const loadFromFile = React.useCallback(async (file) => {
     if (!file || !isLoadableImage(file)) return;
