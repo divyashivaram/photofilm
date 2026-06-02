@@ -23,97 +23,127 @@ const HERO_MAX  = 1200;
 // ============================================================================
 const FILM_CURVE = [[0.0, 0.04], [0.25, 0.22], [0.5, 0.5], [0.75, 0.78], [1.0, 0.96]];
 
+// Special filter ids reserved for the strip's anchor tiles. ORIGINAL renders
+// the unfiltered source; CUSTOM is the active state whenever the user has
+// diverged from a built-in/saved snapshot.
+const ORIGINAL_ID = "original";
+const CUSTOM_ID   = "custom";
+
+// `userAdjust` holds the slider-equivalent portion of the filter. When a tile
+// is clicked, this snapshot loads into the Light/Color/HSL/Curves/Effects
+// state so sliders reflect what the filter does. `ops` keeps the remainder
+// that doesn't yet have a slider counterpart (channel_saturation, monochrome,
+// bloom, grain math — see CLAUDE.md TODO #3 Phase B). Some op ordering shifts
+// to applyUserAdjustments' Lightroom-ish order; visual drift is subtle.
+//
 // `id` keys the cache + URL. `name` / `sub` / `blurb` drive UI text.
 const PRESETS_LIST = [
   {
     id: "provia", name: "PROVIA", sub: "STANDARD",
     blurb: "Balanced daily driver. Restrained, realistic, neutral.",
+    userAdjust: {
+      color:  { saturation: 10 },
+      light:  { contrast: 8 },
+      curves: { rgb: FILM_CURVE },
+    },
     ops: [
-      ["tone_curve", { points: FILM_CURVE }],
-      ["saturation", { amount: 0.10 }],
-      ["contrast",   { amount: 0.08 }],
-      ["grain",      { amount: 0.25 }],
+      ["grain", { amount: 0.25 }],
     ],
   },
   {
     id: "velvia", name: "VELVIA", sub: "VIVID",
     blurb: "Punchy landscape stock with rich greens and blues.",
+    userAdjust: {
+      color:  { saturation: 35 },
+      light:  { contrast: 25 },
+      curves: { rgb: FILM_CURVE },
+    },
     ops: [
-      ["tone_curve", { points: FILM_CURVE }],
-      ["contrast",   { amount: 0.25 }],
-      ["saturation", { amount: 0.35 }],
       ["channel_saturation", { reds: 0.25, greens: 0.30, blues: 0.15 }],
-      ["grain",      { amount: 0.2 }],
+      ["grain", { amount: 0.2 }],
     ],
   },
   {
     id: "astia", name: "ASTIA", sub: "SOFT",
     blurb: "Portrait stock — soft skin, creamy highlights.",
+    userAdjust: {
+      color:  { saturation: 5, temp: 20, tint: 5 },
+      curves: { rgb: [[0.0, 0.06], [0.3, 0.30], [0.7, 0.74], [1.0, 0.95]] },
+    },
     ops: [
-      ["tone_curve",    { points: [[0.0, 0.06], [0.3, 0.30], [0.7, 0.74], [1.0, 0.95]] }],
-      ["white_balance", { temp: 0.20, tint: 0.05 }],
-      ["saturation",    { amount: 0.05 }],
       ["channel_saturation", { reds: 0.15, greens: -0.10, blues: -0.05 }],
-      ["grain",         { amount: 0.2 }],
+      ["grain", { amount: 0.2 }],
     ],
   },
   {
     id: "classic-chrome", name: "CLASSIC CHROME", sub: "DOCUMENTARY",
     blurb: "Muted travel-doc tones. Lifted blacks, cyan shadows.",
+    userAdjust: {
+      color:  { saturation: -25, temp: 15, tint: -5 },
+      light:  { contrast: 10 },
+      curves: { rgb: FILM_CURVE },
+    },
     ops: [
-      ["tone_curve",         { points: FILM_CURVE }],
-      ["white_balance",      { temp: 0.15, tint: -0.05 }],
-      ["saturation",         { amount: -0.25 }],
       ["channel_saturation", { reds: -0.15, greens: 0.05, blues: 0.10 }],
-      ["contrast",           { amount: 0.10 }],
-      ["grain",              { amount: 0.4 }],
+      ["grain", { amount: 0.4 }],
     ],
   },
   {
     id: "eterna", name: "ETERNA", sub: "CINEMA",
     blurb: "Cinematic flat profile. Soft, expensive, understated.",
+    userAdjust: {
+      color:  { saturation: -30, temp: 5, tint: -5 },
+      light:  { contrast: -10 },
+      curves: { rgb: [[0.0, 0.08], [0.5, 0.48], [1.0, 0.88]] },
+    },
     ops: [
-      ["tone_curve",    { points: [[0.0, 0.08], [0.5, 0.48], [1.0, 0.88]] }],
-      ["saturation",    { amount: -0.30 }],
-      ["white_balance", { temp: 0.05, tint: -0.05 }],
-      ["contrast",      { amount: -0.10 }],
-      ["grain",         { amount: 0.3 }],
+      ["grain", { amount: 0.3 }],
     ],
   },
   {
     id: "acros", name: "ACROS", sub: "MONOCHROME",
     blurb: "Silver-halide monochrome with deep, painterly grain.",
+    userAdjust: {
+      light:  { contrast: 15 },
+      curves: { rgb: [[0.0, 0.02], [0.3, 0.22], [0.7, 0.80], [1.0, 0.98]] },
+    },
     ops: [
       ["monochrome", { red: 0.4, green: 0.4, blue: 0.2 }],
-      ["tone_curve", { points: [[0.0, 0.02], [0.3, 0.22], [0.7, 0.80], [1.0, 0.98]] }],
-      ["contrast",   { amount: 0.15 }],
-      ["grain",      { amount: 0.6 }],
+      ["grain", { amount: 0.6 }],
     ],
   },
   {
     id: "synthwave", name: "SYNTHWAVE", sub: "NEON DUSK",
     blurb: "Neon dreams. Magenta bloom and retro-future glow.",
+    userAdjust: {
+      color:  { saturation: 40 },
+      light:  { contrast: 20 },
+      curves: {
+        r: [[0.0, 0.08], [0.3, 0.32], [0.7, 0.78], [1.0, 1.0]],
+        g: [[0.0, 0.0 ], [0.3, 0.16], [0.7, 0.48], [1.0, 0.82]],
+        b: [[0.0, 0.28], [0.3, 0.50], [0.7, 0.78], [1.0, 0.95]],
+      },
+    },
     ops: [
-      ["contrast",   { amount: 0.20 }],
-      ["tone_curve", { points: [[0.0, 0.08], [0.3, 0.32], [0.7, 0.78], [1.0, 1.0]],  channel: "r" }],
-      ["tone_curve", { points: [[0.0, 0.0 ], [0.3, 0.16], [0.7, 0.48], [1.0, 0.82]], channel: "g" }],
-      ["tone_curve", { points: [[0.0, 0.28], [0.3, 0.50], [0.7, 0.78], [1.0, 0.95]], channel: "b" }],
-      ["saturation", { amount: 0.40 }],
-      ["bloom",      { threshold: 0.55, blur_radius: 30.0, amount: 0.55 }],
-      ["grain",      { amount: 0.25 }],
+      ["bloom", { threshold: 0.55, blur_radius: 30.0, amount: 0.55 }],
+      ["grain", { amount: 0.25 }],
     ],
   },
   {
     id: "japan-night", name: "JAPAN NIGHT", sub: "TUNGSTEN",
     blurb: "CineStill 800T tungsten with halation and neon haze.",
+    userAdjust: {
+      color:  { saturation: -10 },
+      light:  { contrast: 12 },
+      curves: {
+        rgb: [[0.0, 0.03], [0.25, 0.20], [0.5, 0.48], [0.75, 0.78], [1.0, 0.97]],
+        r:   [[0.0, 0.02], [0.3, 0.28], [0.7, 0.82], [1.0, 1.0]],
+        g:   [[0.0, 0.04], [0.3, 0.24], [0.7, 0.70], [1.0, 0.92]],
+        b:   [[0.0, 0.10], [0.3, 0.32], [0.7, 0.58], [1.0, 0.80]],
+      },
+    },
     ops: [
-      ["tone_curve",         { points: [[0.0, 0.03], [0.25, 0.20], [0.5, 0.48], [0.75, 0.78], [1.0, 0.97]] }],
-      ["tone_curve",         { points: [[0.0, 0.02], [0.3, 0.28], [0.7, 0.82], [1.0, 1.0]],  channel: "r" }],
-      ["tone_curve",         { points: [[0.0, 0.04], [0.3, 0.24], [0.7, 0.70], [1.0, 0.92]], channel: "g" }],
-      ["tone_curve",         { points: [[0.0, 0.10], [0.3, 0.32], [0.7, 0.58], [1.0, 0.80]], channel: "b" }],
-      ["saturation",         { amount: -0.10 }],
       ["channel_saturation", { reds: 0.25, greens: -0.10, blues: 0.15 }],
-      ["contrast",           { amount: 0.12 }],
       ["bloom",              { threshold: 0.60, blur_radius: 22.0, amount: 0.35 }],
       ["grain",              { amount: 0.35 }],
     ],
@@ -126,14 +156,17 @@ const PRESETS_LIST = [
     // CLAUDE.md TODO #3 Phase 2.
     id: "vintage-mute", name: "VINTAGE MUTE", sub: "FADED",
     blurb: "Matte-lifted shadows, muted palette, warm tint. Imported from XMP.",
+    userAdjust: {
+      color:  { saturation: -28, temp: 3, tint: 5 },
+      light:  { contrast: 6 },
+      curves: {
+        rgb: [[0, 0.1529], [0.1451, 0.1804], [0.3216, 0.3059], [0.7137, 0.7294], [1.0, 0.9647]],
+        r:   [[0, 0], [0.2000, 0.1176], [0.5020, 0.5059], [0.6784, 0.7451], [1.0, 1.0]],
+        g:   [[0, 0], [0.2000, 0.1176], [0.5020, 0.5020], [0.7098, 0.7843], [1.0, 1.0]],
+        b:   [[0, 0], [0.1804, 0.0824], [0.4824, 0.4706], [0.7216, 0.7843], [1.0, 1.0]],
+      },
+    },
     ops: [
-      ["white_balance",      { temp: 0.03, tint: 0.05 }],
-      ["contrast",           { amount: 0.06 }],
-      ["tone_curve",         { points: [[0, 0.1529], [0.1451, 0.1804], [0.3216, 0.3059], [0.7137, 0.7294], [1.0, 0.9647]] }],
-      ["tone_curve",         { points: [[0, 0], [0.2000, 0.1176], [0.5020, 0.5059], [0.6784, 0.7451], [1.0, 1.0]], channel: "r" }],
-      ["tone_curve",         { points: [[0, 0], [0.2000, 0.1176], [0.5020, 0.5020], [0.7098, 0.7843], [1.0, 1.0]], channel: "g" }],
-      ["tone_curve",         { points: [[0, 0], [0.1804, 0.0824], [0.4824, 0.4706], [0.7216, 0.7843], [1.0, 1.0]], channel: "b" }],
-      ["saturation",         { amount: -0.28 }],
       ["channel_saturation", { reds: 0.02, greens: -0.20, blues: -0.40 }],
       ["grain",              { amount: 0.50 }],
     ],
@@ -603,6 +636,27 @@ function isUserAdjustActive(u) {
       || isEffectsAdjustActive(u.effects);
 }
 
+// Expand a filter's partial `userAdjust` snapshot into a full state object
+// (one slice per panel, all keys filled with ZERO_* defaults). Used when a
+// filter tile is clicked to load slider state.
+function presetSnapshot(filter) {
+  const snap = (filter && filter.userAdjust) || {};
+  const cv = snap.curves || {};
+  const hs = snap.hsl || {};
+  return {
+    light:   { ...ZERO_LIGHT,   ...(snap.light   || {}) },
+    color:   { ...ZERO_COLOR,   ...(snap.color   || {}) },
+    hsl:     Object.fromEntries(HSL_HUE_KEYS.map((k) => [k, { ...ZERO_HSL[k], ...(hs[k] || {}) }])),
+    curves: {
+      rgb: (cv.rgb || ZERO_CURVES.rgb).map((p) => [...p]),
+      r:   (cv.r   || ZERO_CURVES.r  ).map((p) => [...p]),
+      g:   (cv.g   || ZERO_CURVES.g  ).map((p) => [...p]),
+      b:   (cv.b   || ZERO_CURVES.b  ).map((p) => [...p]),
+    },
+    effects: { ...ZERO_EFFECTS, ...(snap.effects || {}) },
+  };
+}
+
 // Run all user adjustments after the preset, in Lightroom-ish order:
 // WB → exposure/contrast → tonal regions → presence → curves → HSL → vibrance/
 // saturation → split tone → sharpen → vignette → grain. One buffer round-trip.
@@ -613,18 +667,23 @@ function applyUserAdjustments(imageData, width, height, u) {
   const n = width * height;
   const L = u.light, C = u.color, H = u.hsl, CV = u.curves, FX = u.effects;
 
+  // Slice values may be `undefined` when a filter's partial snapshot is passed
+  // in (e.g. a built-in's userAdjust = { light: { contrast: 25 } }). Coalesce
+  // to 0 in arithmetic so partials don't NaN the buffer.
   if (C) {
-    if (C.temp || C.tint) opWhiteBalance(buf, n, { temp: C.temp / 100, tint: C.tint / 100 });
+    if (C.temp || C.tint) opWhiteBalance(buf, n, { temp: (C.temp || 0) / 100, tint: (C.tint || 0) / 100 });
   }
   if (L) {
     if (L.exposure) opExposure(buf, { ev: L.exposure / 10 });
     if (L.contrast) opContrast(buf, n, { amount: L.contrast / 100 });
-    opLightTone(buf, n, {
-      highlights: L.highlights / 100,
-      shadows:    L.shadows    / 100,
-      whites:     L.whites     / 100,
-      blacks:     L.blacks     / 100,
-    });
+    if (L.highlights || L.shadows || L.whites || L.blacks) {
+      opLightTone(buf, n, {
+        highlights: (L.highlights || 0) / 100,
+        shadows:    (L.shadows    || 0) / 100,
+        whites:     (L.whites     || 0) / 100,
+        blacks:     (L.blacks     || 0) / 100,
+      });
+    }
     if (L.texture) opUnsharp(buf, n, width, height, { amount: L.texture / 100, radius: 2  });
     if (L.clarity) opUnsharp(buf, n, width, height, { amount: L.clarity / 100, radius: 15 });
     if (L.dehaze)  opUnsharp(buf, n, width, height, { amount: L.dehaze  / 100, radius: 45 });
@@ -641,34 +700,34 @@ function applyUserAdjustments(imageData, width, height, u) {
     if (C.saturation) opSaturation(buf, n, { amount: C.saturation / 100 });
     if (C.shadowSat || C.highlightSat) {
       opSplitTone(buf, n, {
-        shadowHue: C.shadowHue, shadowSat: C.shadowSat / 100,
-        highlightHue: C.highlightHue, highlightSat: C.highlightSat / 100,
-        balance: C.balance / 100,
+        shadowHue: C.shadowHue || 210, shadowSat: (C.shadowSat || 0) / 100,
+        highlightHue: C.highlightHue || 40, highlightSat: (C.highlightSat || 0) / 100,
+        balance: (C.balance || 0) / 100,
       });
     }
   }
   if (FX) {
     if (FX.sharpenAmount) {
       opSharpen(buf, n, width, height, {
-        amount: FX.sharpenAmount / 100,
-        radius: Math.max(0.3, FX.sharpenRadius / 10),
-        detail: FX.sharpenDetail / 100,
-        masking: FX.sharpenMasking / 100,
+        amount:  FX.sharpenAmount / 100,
+        radius:  Math.max(0.3, (FX.sharpenRadius || 10) / 10),
+        detail:  (FX.sharpenDetail  || 0) / 100,
+        masking: (FX.sharpenMasking || 0) / 100,
       });
     }
     if (FX.vignetteAmount) {
       opVignette(buf, n, width, height, {
-        amount: FX.vignetteAmount / 100,
-        midpoint: FX.vignetteMidpoint / 100,
-        roundness: FX.vignetteRoundness / 100,
-        feather: FX.vignetteFeather / 100,
+        amount:    FX.vignetteAmount / 100,
+        midpoint:  (FX.vignetteMidpoint  || 50) / 100,
+        roundness: (FX.vignetteRoundness || 0)  / 100,
+        feather:   (FX.vignetteFeather   || 50) / 100,
       });
     }
     if (FX.grainAmount) {
       // Size shrinks the per-pixel scale; roughness boosts variance.
       opGrain(buf, n, {
-        amount: (FX.grainAmount / 100) * (1 + FX.grainRoughness / 200),
-        seed: 17 + ((FX.grainSize | 0) * 7),
+        amount: (FX.grainAmount / 100) * (1 + (FX.grainRoughness || 0) / 200),
+        seed: 17 + (((FX.grainSize || 0) | 0) * 7),
       });
     }
   }
@@ -787,23 +846,100 @@ function loadImageFromBlob(blob) {
   });
 }
 
-async function loadOrientedCanvas(blob) {
+async function loadOrientedCanvas(blob, orientationOverride = null) {
+  const hasOverride = orientationOverride != null;
+  const opts = { imageOrientation: hasOverride ? "none" : "from-image" };
+  let base;
   try {
-    const bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" });
+    const bitmap = await createImageBitmap(blob, opts);
     const c = document.createElement("canvas");
     c.width = bitmap.width;
     c.height = bitmap.height;
     c.getContext("2d").drawImage(bitmap, 0, 0);
     bitmap.close && bitmap.close();
-    return c;
+    base = c;
   } catch (e) {
     const img = await loadImageFromBlob(blob);
     const c = document.createElement("canvas");
     c.width = img.naturalWidth || img.width;
     c.height = img.naturalHeight || img.height;
     c.getContext("2d").drawImage(img, 0, 0);
-    return c;
+    base = c;
   }
+  return hasOverride && orientationOverride !== 1
+    ? applyOrientationToCanvas(base, orientationOverride)
+    : base;
+}
+
+// EXIF orientation values 1-8. 1 = identity, 6 = rotate 90 CW (portrait
+// stored as landscape pixels), 8 = rotate 90 CCW, 3 = rotate 180, 2/4/5/7
+// include a flip.
+function applyOrientationToCanvas(src, orientation) {
+  if (!orientation || orientation === 1) return src;
+  const w = src.width, h = src.height;
+  const swapped = orientation >= 5 && orientation <= 8;
+  const out = document.createElement("canvas");
+  out.width = swapped ? h : w;
+  out.height = swapped ? w : h;
+  const ctx = out.getContext("2d");
+  switch (orientation) {
+    case 2: ctx.translate(w, 0); ctx.scale(-1, 1); break;
+    case 3: ctx.translate(w, h); ctx.rotate(Math.PI); break;
+    case 4: ctx.translate(0, h); ctx.scale(1, -1); break;
+    case 5: ctx.rotate(0.5 * Math.PI); ctx.scale(1, -1); break;
+    case 6: ctx.translate(h, 0); ctx.rotate(0.5 * Math.PI); break;
+    case 7: ctx.translate(h, w); ctx.rotate(0.5 * Math.PI); ctx.scale(-1, 1); break;
+    case 8: ctx.translate(0, w); ctx.rotate(-0.5 * Math.PI); break;
+  }
+  ctx.drawImage(src, 0, 0);
+  return out;
+}
+
+// Parse the EXIF Orientation tag (0x0112) from a TIFF header located at
+// `tiffStart` inside `bytes`. Returns 1-8 if found, null otherwise.
+function readTiffOrientation(bytes, tiffStart) {
+  if (bytes.length < tiffStart + 8) return null;
+  const b0 = bytes[tiffStart], b1 = bytes[tiffStart + 1];
+  let littleEndian;
+  if (b0 === 0x49 && b1 === 0x49) littleEndian = true;
+  else if (b0 === 0x4D && b1 === 0x4D) littleEndian = false;
+  else return null;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const magic = dv.getUint16(tiffStart + 2, littleEndian);
+  if (magic !== 0x002A) return null;
+  const ifd0 = tiffStart + dv.getUint32(tiffStart + 4, littleEndian);
+  if (ifd0 + 2 > bytes.length || ifd0 < tiffStart) return null;
+  const count = dv.getUint16(ifd0, littleEndian);
+  for (let i = 0; i < count; i++) {
+    const off = ifd0 + 2 + i * 12;
+    if (off + 12 > bytes.length) break;
+    const tag = dv.getUint16(off, littleEndian);
+    if (tag === 0x0112) {
+      const value = dv.getUint16(off + 8, littleEndian);
+      if (value >= 1 && value <= 8) return value;
+    }
+  }
+  return null;
+}
+
+// Find the EXIF orientation for a RAW container. TIFF-based RAWs (CR2, NEF,
+// ARW, DNG, ORF, RW2, PEF, NRW) carry it in the TIFF header at offset 0.
+// Other containers (RAF, CR3) embed a TIFF block elsewhere; scan for the
+// magic bytes within the first chunk of the file.
+function readRawOrientation(bytes) {
+  const direct = readTiffOrientation(bytes, 0);
+  if (direct) return direct;
+  const limit = Math.min(bytes.length - 8, 1024 * 1024);
+  for (let i = 0; i < limit; i++) {
+    const a = bytes[i], b = bytes[i + 1], c = bytes[i + 2], d = bytes[i + 3];
+    const isLE = a === 0x49 && b === 0x49 && c === 0x2A && d === 0x00;
+    const isBE = a === 0x4D && b === 0x4D && c === 0x00 && d === 0x2A;
+    if (isLE || isBE) {
+      const o = readTiffOrientation(bytes, i);
+      if (o) return o;
+    }
+  }
+  return null;
 }
 
 // Walk JPEG markers starting at SOI; return the Start-Of-Frame marker byte.
@@ -868,7 +1004,9 @@ async function extractEmbeddedJpeg(file) {
   const bytes = new Uint8Array(buf);
   const found = findLargestJpeg(bytes);
   if (!found) return null;
-  return new Blob([bytes.slice(found.start, found.start + found.length)], { type: "image/jpeg" });
+  const jpeg = new Blob([bytes.slice(found.start, found.start + found.length)], { type: "image/jpeg" });
+  const orientation = readRawOrientation(bytes);
+  return { jpeg, orientation };
 }
 
 function downscaleToImageData(srcCanvas, maxEdge) {
@@ -1309,6 +1447,7 @@ Object.assign(window, {
   RAW_EXT, IMG_EXT, THUMB_MAX, HERO_MAX,
   // presets
   PRESETS, PRESETS_LIST, PRESET_IDS, FILM_CURVE,
+  ORIGINAL_ID, CUSTOM_ID, presetSnapshot,
   serializeUserEdits,
   // pipeline
   applyPreset, imageDataToFloat, floatToImageData,

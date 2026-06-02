@@ -14,15 +14,38 @@ const usePhotofilm = () => React.useContext(PhotofilmContext);
 // PhotofilmProvider — owns app state. Starts empty;
 // drag/paste/picker swap it out for the user's own image.
 // ----------------------------------------------------------------------------
+const CUSTOM_FILTERS_KEY = "photofilm.customFilters.v1";
+const INITIAL_ACTIVE_PRESET = "classic-chrome";
+const INITIAL_SNAPSHOT = presetSnapshot(PRESETS[INITIAL_ACTIVE_PRESET]);
+
+function loadCustomFilters() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_FILTERS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
 function PhotofilmProvider({ children }) {
   const [sourceCanvas, setSourceCanvas] = React.useState(null);
   const [sourceName, setSourceName]     = React.useState("DSCF_4821.RAF");
-  const [activePreset, setActivePreset] = React.useState("classic-chrome");
+  // `activePreset` controls which tile is highlighted in the strip and the
+  // shown filter name. `baseFilterId` tracks which underlying ops chain is
+  // applied by applyPreset — they only differ when activePreset is CUSTOM, in
+  // which case baseFilterId stays at the filter the user forked from. This is
+  // what keeps monochrome/bloom/channel_saturation/grain present after the
+  // user starts editing — those ops live on the base, not in the panels.
+  const [activePreset, setActivePreset] = React.useState(INITIAL_ACTIVE_PRESET);
+  const [baseFilterId, setBaseFilterId] = React.useState(INITIAL_ACTIVE_PRESET);
   const [intensity, setIntensity]       = React.useState(85);
   const [selected, setSelected]         = React.useState(() => new Set());
   const [activeTab, setActiveTab]       = React.useState("light");
   const [status, setStatus]             = React.useState("");
   const [compare, setCompare]           = React.useState(false);
+  const [savedFilters, setSavedFilters] = React.useState(loadCustomFilters);
 
   // thumb/hero ImageData regenerate from sourceCanvas; both caches are keyed
   // by presetId and cleared when the source changes.
@@ -55,26 +78,136 @@ function PhotofilmProvider({ children }) {
   // User adjustments by tab — applied after the active preset in the hero
   // render. Kept separate from the preset cache so changing a slider doesn't
   // invalidate the (expensive) preset rendering.
-  const [lightAdjust,   setLightAdjust]   = React.useState(ZERO_LIGHT);
-  const [colorAdjust,   setColorAdjust]   = React.useState(ZERO_COLOR);
-  const [hslAdjust,     setHSLAdjust]     = React.useState(ZERO_HSL);
-  const [curvesAdjust,  setCurvesAdjust]  = React.useState(ZERO_CURVES);
-  const [effectsAdjust, setEffectsAdjust] = React.useState(ZERO_EFFECTS);
+  //
+  // Boot state matches the initial active preset's userAdjust snapshot so the
+  // hero shows the full filter look (not just the trimmed ops remainder) the
+  // first time a photo loads.
+  const [lightAdjust,   setLightAdjust]   = React.useState(INITIAL_SNAPSHOT.light);
+  const [colorAdjust,   setColorAdjust]   = React.useState(INITIAL_SNAPSHOT.color);
+  const [hslAdjust,     setHSLAdjust]     = React.useState(INITIAL_SNAPSHOT.hsl);
+  const [curvesAdjust,  setCurvesAdjust]  = React.useState(INITIAL_SNAPSHOT.curves);
+  const [effectsAdjust, setEffectsAdjust] = React.useState(INITIAL_SNAPSHOT.effects);
 
-  const updateLight   = React.useCallback((key, value) => setLightAdjust  ((p) => ({ ...p, [key]: value })), []);
-  const updateColor   = React.useCallback((key, value) => setColorAdjust  ((p) => ({ ...p, [key]: value })), []);
-  const updateEffects = React.useCallback((key, value) => setEffectsAdjust((p) => ({ ...p, [key]: value })), []);
+  // Any user-driven slider/pill edit forks the active filter into CUSTOM.
+  // Programmatic snapshot loads (selectFilter) bypass this by writing the
+  // adjustment slices directly via the raw setters below.
+  const forkToCustom = React.useCallback(() => setActivePreset(CUSTOM_ID), []);
+
+  const updateLight   = React.useCallback((key, value) => { setLightAdjust  ((p) => ({ ...p, [key]: value })); forkToCustom(); }, [forkToCustom]);
+  const updateColor   = React.useCallback((key, value) => { setColorAdjust  ((p) => ({ ...p, [key]: value })); forkToCustom(); }, [forkToCustom]);
+  const updateEffects = React.useCallback((key, value) => { setEffectsAdjust((p) => ({ ...p, [key]: value })); forkToCustom(); }, [forkToCustom]);
   const updateHSL = React.useCallback((colorKey, axis, value) => {
     setHSLAdjust((p) => ({ ...p, [colorKey]: { ...(p[colorKey] || { h: 0, s: 0, l: 0 }), [axis]: value } }));
-  }, []);
+    forkToCustom();
+  }, [forkToCustom]);
   const updateCurves = React.useCallback((channel, points) => {
     setCurvesAdjust((p) => ({ ...p, [channel]: points }));
+    forkToCustom();
+  }, [forkToCustom]);
+  const resetLight   = React.useCallback(() => { setLightAdjust(ZERO_LIGHT);     forkToCustom(); }, [forkToCustom]);
+  const resetColor   = React.useCallback(() => { setColorAdjust(ZERO_COLOR);     forkToCustom(); }, [forkToCustom]);
+  const resetHSL     = React.useCallback(() => { setHSLAdjust(ZERO_HSL);         forkToCustom(); }, [forkToCustom]);
+  const resetCurves  = React.useCallback(() => { setCurvesAdjust(ZERO_CURVES);   forkToCustom(); }, [forkToCustom]);
+  const resetEffects = React.useCallback(() => { setEffectsAdjust(ZERO_EFFECTS); forkToCustom(); }, [forkToCustom]);
+
+  // Drops every panel adjustment back to its zero state, clears the active
+  // filter, and discards any pending (un-baked) crop / rotate / perspective
+  // edit. Baked transforms already written into sourceCanvas can't be undone
+  // here — they require re-loading the photo.
+  const resetAllAdjustments = React.useCallback(() => {
+    setLightAdjust(ZERO_LIGHT);
+    setColorAdjust(ZERO_COLOR);
+    setHSLAdjust(ZERO_HSL);
+    setCurvesAdjust(ZERO_CURVES);
+    setEffectsAdjust(ZERO_EFFECTS);
+    setActivePreset(ORIGINAL_ID);
+    setBaseFilterId(ORIGINAL_ID);
+    setPending({
+      mode: null,
+      rotateAngle: 0,
+      perspectiveAmount: 0,
+      transform: { ...ZERO_TRANSFORM },
+      crop: { ...ZERO_CROP },
+    });
   }, []);
-  const resetLight   = React.useCallback(() => setLightAdjust(ZERO_LIGHT),   []);
-  const resetColor   = React.useCallback(() => setColorAdjust(ZERO_COLOR),   []);
-  const resetHSL     = React.useCallback(() => setHSLAdjust(ZERO_HSL),       []);
-  const resetCurves  = React.useCallback(() => setCurvesAdjust(ZERO_CURVES), []);
-  const resetEffects = React.useCallback(() => setEffectsAdjust(ZERO_EFFECTS), []);
+
+  // Click handler for filter tiles. Sets active id, sets baseFilterId (the
+  // underlying ops chain to render), and loads the filter's snapshot into the
+  // five adjustment slices via the *raw* setters (bypassing the auto-fork
+  // wrappers, since this is a programmatic load, not a user edit).
+  //   ORIGINAL: base = ORIGINAL (no ops); sliders stay where they were.
+  //   CUSTOM:   base stays at whatever the user previously forked from, so
+  //             the ops chain (monochrome/bloom/etc.) carries forward.
+  //   built-in: base = the preset id.
+  //   saved:    base = the saved entry's baseFilterId (which may be a
+  //             built-in or ORIGINAL).
+  const selectFilter = React.useCallback((id) => {
+    setActivePreset(id);
+    if (id === CUSTOM_ID) return;  // base stays put; sliders stay put
+    if (id === ORIGINAL_ID) {
+      setBaseFilterId(ORIGINAL_ID);
+      return;
+    }
+    const builtin = PRESETS[id];
+    const saved   = !builtin && savedFilters.find((s) => s.id === id);
+    const filter  = builtin || saved;
+    if (!filter) return;
+    setBaseFilterId(builtin ? id : (saved.baseFilterId || ORIGINAL_ID));
+    const snap = presetSnapshot(filter);
+    setLightAdjust(snap.light);
+    setColorAdjust(snap.color);
+    setHSLAdjust(snap.hsl);
+    setCurvesAdjust(snap.curves);
+    setEffectsAdjust(snap.effects);
+  }, [savedFilters]);
+
+  // Persist a named copy of the current userAdjust as a custom filter tile.
+  // Returns the new filter's id, or null if the name was invalid.
+  const saveAsCustomFilter = React.useCallback((rawName) => {
+    const name = (rawName || "").trim();
+    if (!name) return null;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "custom";
+    let id = `saved-${slug}`;
+    let n = 2;
+    const taken = (candidate) =>
+      PRESETS[candidate] != null || savedFilters.some((s) => s.id === candidate);
+    while (taken(id)) { id = `saved-${slug}-${n++}`; }
+    const entry = {
+      id,
+      name: name.toUpperCase(),
+      sub: "CUSTOM",
+      blurb: `Saved ${new Date().toLocaleDateString()}`,
+      baseFilterId,
+      userAdjust: {
+        light:   lightAdjust,
+        color:   colorAdjust,
+        hsl:     hslAdjust,
+        curves:  curvesAdjust,
+        effects: effectsAdjust,
+      },
+      savedAt: new Date().toISOString(),
+    };
+    setSavedFilters((prev) => {
+      const next = [...prev, entry];
+      try { localStorage.setItem(CUSTOM_FILTERS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setActivePreset(id);
+    return id;
+  }, [lightAdjust, colorAdjust, hslAdjust, curvesAdjust, effectsAdjust, savedFilters, baseFilterId]);
+
+  const deleteCustomFilter = React.useCallback((id) => {
+    setSavedFilters((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      try { localStorage.setItem(CUSTOM_FILTERS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setActivePreset((cur) => {
+      if (cur !== id) return cur;
+      setBaseFilterId(ORIGINAL_ID);
+      return ORIGINAL_ID;
+    });
+  }, []);
 
   // Composite passed down to FilteredPhoto. Memoized so the effect dep in
   // FilteredPhoto only fires when an actual slider changes.
@@ -97,21 +230,23 @@ function PhotofilmProvider({ children }) {
   const loadFromFile = React.useCallback(async (file) => {
     if (!file || !isLoadableImage(file)) return;
     let decodable = file;
+    let orientation = null;
     try {
       if (RAW_EXT.test(file.name)) {
         setStatus("Extracting preview from RAW…");
         await new Promise((r) => setTimeout(r, 16));
-        const jpeg = await extractEmbeddedJpeg(file);
-        if (!jpeg) {
+        const preview = await extractEmbeddedJpeg(file);
+        if (!preview) {
           setStatus("No JPEG preview in this RAW file");
           setTimeout(() => setStatus(""), 2400);
           return;
         }
-        decodable = jpeg;
+        decodable = preview.jpeg;
+        orientation = preview.orientation;
       } else {
         setStatus("Loading…");
       }
-      const c = await loadOrientedCanvas(decodable);
+      const c = await loadOrientedCanvas(decodable, orientation);
       setSourceCanvas(c);
       setSourceName(file.name);
       setStatus("");
@@ -186,7 +321,8 @@ function PhotofilmProvider({ children }) {
   // intensity is stored 0–100 (slider domain); render-time consumers divide.
   const value = {
     sourceCanvas, sourceName,
-    activePreset, setActivePreset,
+    activePreset, setActivePreset, selectFilter, baseFilterId,
+    savedFilters, saveAsCustomFilter, deleteCustomFilter,
     intensity, setIntensity,
     selected, setSelected, toggleSelected,
     activeTab, setActiveTab,
@@ -204,6 +340,7 @@ function PhotofilmProvider({ children }) {
     curvesAdjust,  updateCurves,  resetCurves,
     effectsAdjust, updateEffects, resetEffects,
     userAdjust,
+    resetAllAdjustments,
   };
   return <PhotofilmContext.Provider value={value}>{children}</PhotofilmContext.Provider>;
 }
@@ -229,16 +366,37 @@ function Darkroom({ tweaks }) {
   const ph = usePhotofilm();
   const {
     sourceCanvas, sourceName,
-    activePreset, setActivePreset,
+    activePreset, selectFilter, baseFilterId,
+    savedFilters, saveAsCustomFilter, deleteCustomFilter,
     intensity, setIntensity,
     activeTab, setActiveTab,
     status, compare, setCompare,
     thumb, hero, thumbCache, heroCache,
     loadFromFile, cacheGen, pending,
     userAdjust, setPendingCrop,
+    resetAllAdjustments,
   } = ph;
 
-  const active = PRESETS[activePreset] || PRESETS_LIST[0];
+  const [resetConfirmOpen, setResetConfirmOpen] = React.useState(false);
+  const hasAdjustments = isUserAdjustActive(userAdjust) || pending.mode != null;
+  const confirmReset = React.useCallback(() => {
+    resetAllAdjustments();
+    setResetConfirmOpen(false);
+  }, [resetAllAdjustments]);
+
+  const active =
+    PRESETS[activePreset]
+    || savedFilters.find((s) => s.id === activePreset)
+    || (activePreset === ORIGINAL_ID ? { name: "ORIGINAL", sub: "SOURCE" } : null)
+    || (activePreset === CUSTOM_ID   ? { name: "CUSTOM",   sub: "EDITED" } : null)
+    || PRESETS_LIST[0];
+
+  const handleSaveCustom = React.useCallback(() => {
+    const name = window.prompt("Save current edits as a filter. Name:");
+    if (name == null) return;
+    const id = saveAsCustomFilter(name);
+    if (!id) window.alert("Please enter a filter name.");
+  }, [saveAsCustomFilter]);
   const renderedIntensity = compare ? 0 : intensity / 100;
   const thumbSize = (t.thumbSize || 96) * density;
   const showHist = t.histogram !== false;
@@ -301,6 +459,11 @@ function Darkroom({ tweaks }) {
           accent={accent}
         >◉ HOLD TO COMPARE</ToolbarBtn>
         <div style={{ width: 1, height: 18, background: border, margin: "0 4px" }} />
+        <ToolbarBtn
+          onClick={() => hasAdjustments && setResetConfirmOpen(true)}
+          disabled={!hasAdjustments}
+        >↺ RESET</ToolbarBtn>
+        <div style={{ width: 1, height: 18, background: border, margin: "0 4px" }} />
         <ToolbarBtn primary accent={accent} onClick={() => setActiveTab("export")}>↗ EXPORT</ToolbarBtn>
       </div>
 
@@ -344,7 +507,7 @@ function Darkroom({ tweaks }) {
                 sourceW={hero.w}
                 sourceH={hero.h}
                 cache={heroCache}
-                presetId={activePreset}
+                presetId={baseFilterId}
                 intensity={renderedIntensity}
                 userAdjust={userAdjust}
                 key={`hero-${cacheGen}`}
@@ -407,8 +570,12 @@ function Darkroom({ tweaks }) {
                 FILM SIMULATION
               </span>
               <span style={{ fontFamily: mono, fontSize: 10, color: ultraMuted }}>
-                {PRESETS_LIST.length} PRESETS
+                {PRESETS_LIST.length} PRESETS{savedFilters.length ? ` · ${savedFilters.length} SAVED` : ""}
               </span>
+              <ToolbarBtn
+                onClick={handleSaveCustom}
+                disabled={!sourceCanvas}
+              >+ SAVE CUSTOM</ToolbarBtn>
               <div style={{ flex: 1 }} />
               <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 240 }}>
                 <span style={{ fontFamily: mono, fontSize: 10, color: muted }}>STRENGTH</span>
@@ -427,56 +594,79 @@ function Darkroom({ tweaks }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-              {PRESETS_LIST.map((p) => {
-                const isActive = p.id === activePreset;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => setActivePreset(p.id)}
-                    title={p.blurb}
-                    style={{ flexShrink: 0, width: thumbSize, position: "relative", cursor: "pointer" }}
-                  >
-                    {thumb ? (
-                      <FilteredPhoto
-                        sourceData={thumb.data}
-                        sourceW={thumb.w}
-                        sourceH={thumb.h}
-                        cache={thumbCache}
-                        presetId={p.id}
-                        intensity={1}
-                        objectFit="cover"
-                        key={`thumb-${p.id}-${cacheGen}`}
-                        style={{
-                          width: thumbSize, height: thumbSize, borderRadius: 1,
-                          outline: isActive ? `1.5px solid ${accent}` : `1px solid ${border}`,
-                          outlineOffset: isActive ? 2 : 0,
-                        }}
-                      />
-                    ) : (
-                      <div style={{
-                        width: thumbSize, height: thumbSize,
-                        background: "#222", borderRadius: 1,
-                        outline: isActive ? `1.5px solid ${accent}` : `1px solid ${border}`,
-                      }} />
-                    )}
-                    <div style={{
-                      position: "absolute", left: 0, right: 0, bottom: 0,
-                      padding: "10px 6px 4px",
-                      background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)",
-                      fontFamily: mono, fontSize: 8.5, letterSpacing: "0.08em",
-                      color: isActive ? accent : "#fff", pointerEvents: "none",
-                    }}>
-                      <div style={{ fontWeight: 600 }}>{p.name}</div>
-                    </div>
-                    {isActive && (
-                      <div style={{
-                        position: "absolute", top: 4, right: 4,
-                        width: 6, height: 6, background: accent, borderRadius: "50%",
-                      }} />
-                    )}
-                  </div>
-                );
-              })}
+              <FilterTile
+                id={ORIGINAL_ID}
+                name="ORIGINAL"
+                blurb="Source photo, no filter applied."
+                isActive={activePreset === ORIGINAL_ID}
+                thumb={thumb}
+                thumbCache={thumbCache}
+                cacheGen={cacheGen}
+                presetId={ORIGINAL_ID}
+                thumbUserAdjust={null}
+                onClick={() => selectFilter(ORIGINAL_ID)}
+                thumbSize={thumbSize}
+                accent={accent}
+                border={border}
+                mono={mono}
+              />
+              {PRESETS_LIST.map((p) => (
+                <FilterTile
+                  key={p.id}
+                  id={p.id}
+                  name={p.name}
+                  blurb={p.blurb}
+                  isActive={p.id === activePreset}
+                  thumb={thumb}
+                  thumbCache={thumbCache}
+                  cacheGen={cacheGen}
+                  presetId={p.id}
+                  thumbUserAdjust={p.userAdjust}
+                  onClick={() => selectFilter(p.id)}
+                  thumbSize={thumbSize}
+                  accent={accent}
+                  border={border}
+                  mono={mono}
+                />
+              ))}
+              <FilterTile
+                id={CUSTOM_ID}
+                name="CUSTOM"
+                blurb="Your current edits on top of whichever filter you forked from. Modifying a slider on a filter switches here automatically."
+                isActive={activePreset === CUSTOM_ID}
+                thumb={thumb}
+                thumbCache={thumbCache}
+                cacheGen={cacheGen}
+                presetId={baseFilterId}
+                thumbUserAdjust={userAdjust}
+                onClick={() => selectFilter(CUSTOM_ID)}
+                thumbSize={thumbSize}
+                accent={accent}
+                border={border}
+                mono={mono}
+              />
+              {savedFilters.map((s) => (
+                <FilterTile
+                  key={s.id}
+                  id={s.id}
+                  name={s.name}
+                  blurb={s.blurb}
+                  isActive={s.id === activePreset}
+                  thumb={thumb}
+                  thumbCache={thumbCache}
+                  cacheGen={cacheGen}
+                  presetId={s.baseFilterId || ORIGINAL_ID}
+                  thumbUserAdjust={s.userAdjust}
+                  onClick={() => selectFilter(s.id)}
+                  onDelete={() => {
+                    if (window.confirm(`Delete saved filter "${s.name}"?`)) deleteCustomFilter(s.id);
+                  }}
+                  thumbSize={thumbSize}
+                  accent={accent}
+                  border={border}
+                  mono={mono}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -530,6 +720,93 @@ function Darkroom({ tweaks }) {
             <span>HOLD <Kbd>\</Kbd> TO COMPARE</span>
             <span>← / → TO STEP PRESETS</span>
           </div>
+        </div>
+      </div>
+
+      {resetConfirmOpen && (
+        <ResetConfirmModal
+          ctx={ctx}
+          onCancel={() => setResetConfirmOpen(false)}
+          onConfirm={confirmReset}
+          hasPendingEdit={pending.mode != null}
+        />
+      )}
+    </div>
+  );
+}
+
+function ResetConfirmModal({ ctx, onCancel, onConfirm, hasPendingEdit }) {
+  const { panel, border, text, muted, mono, sans } = ctx;
+  const danger = "#e15a4a";
+
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onCancel();
+      else if (e.key === "Enter") onConfirm();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel, onConfirm]);
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "absolute", inset: 0, zIndex: 50,
+        background: "rgba(8,8,10,0.72)", backdropFilter: "blur(6px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 420, background: panel, color: text,
+          border: `1px solid ${border}`, borderRadius: 4,
+          fontFamily: sans, padding: "20px 22px 18px",
+          boxShadow: "0 30px 80px rgba(0,0,0,0.7)",
+        }}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          fontFamily: mono, fontSize: 10, letterSpacing: "0.12em",
+          color: danger, marginBottom: 14,
+        }}>
+          <span style={{ fontSize: 14 }}>⚠</span>
+          <span>RESET ALL ADJUSTMENTS</span>
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 8 }}>
+          This will clear every slider in <strong>Light</strong>, <strong>Color</strong>,{" "}
+          <strong>HSL</strong>, <strong>Curves</strong>, and <strong>Effects</strong>, and
+          switch the active filter to <strong>ORIGINAL</strong>.
+        </div>
+        {hasPendingEdit && (
+          <div style={{ fontSize: 12, color: muted, lineHeight: 1.5, marginBottom: 8 }}>
+            Your pending crop / rotate / perspective edit will also be discarded.
+          </div>
+        )}
+        <div style={{ fontSize: 12, color: muted, lineHeight: 1.5, marginBottom: 18 }}>
+          This can't be undone. Any already-applied crop or rotation will stay.
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              background: "transparent", color: text,
+              border: `1px solid ${border}`, borderRadius: 2,
+              padding: "7px 14px", fontSize: 10, fontFamily: mono,
+              letterSpacing: "0.08em", cursor: "pointer",
+            }}
+          >CANCEL</button>
+          <button
+            onClick={onConfirm}
+            autoFocus
+            style={{
+              background: danger, color: "#fff",
+              border: "none", borderRadius: 2,
+              padding: "7px 14px", fontSize: 10, fontFamily: mono,
+              letterSpacing: "0.08em", cursor: "pointer", fontWeight: 600,
+            }}
+          >↺ RESET</button>
         </div>
       </div>
     </div>
@@ -717,14 +994,88 @@ function CropOverlay({ rect, crop, onChange }) {
   );
 }
 
+// ─── FilterTile ───────────────────────────────────────────────────────────
+// One tile in the film strip. Renders the active source thumb through the
+// given preset id and userAdjust snapshot so the tile previews what selecting
+// it would do. ORIGINAL passes a null userAdjust to skip the userAdjust pass;
+// CUSTOM passes the live userAdjust; built-ins/saved pass their snapshot.
+function FilterTile({
+  id, name, blurb, isActive,
+  thumb, thumbCache, cacheGen, presetId, thumbUserAdjust,
+  onClick, onDelete,
+  thumbSize, accent, border, mono,
+}) {
+  return (
+    <div
+      onClick={onClick}
+      title={blurb}
+      style={{ flexShrink: 0, width: thumbSize, position: "relative", cursor: "pointer" }}
+    >
+      {thumb ? (
+        <FilteredPhoto
+          sourceData={thumb.data}
+          sourceW={thumb.w}
+          sourceH={thumb.h}
+          cache={thumbCache}
+          presetId={presetId}
+          userAdjust={thumbUserAdjust || undefined}
+          intensity={1}
+          objectFit="cover"
+          key={`thumb-${id}-${cacheGen}`}
+          style={{
+            width: thumbSize, height: thumbSize, borderRadius: 1,
+            outline: isActive ? `1.5px solid ${accent}` : `1px solid ${border}`,
+            outlineOffset: isActive ? 2 : 0,
+          }}
+        />
+      ) : (
+        <div style={{
+          width: thumbSize, height: thumbSize,
+          background: "#222", borderRadius: 1,
+          outline: isActive ? `1.5px solid ${accent}` : `1px solid ${border}`,
+        }} />
+      )}
+      <div style={{
+        position: "absolute", left: 0, right: 0, bottom: 0,
+        padding: "10px 6px 4px",
+        background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)",
+        fontFamily: mono, fontSize: 8.5, letterSpacing: "0.08em",
+        color: isActive ? accent : "#fff", pointerEvents: "none",
+      }}>
+        <div style={{ fontWeight: 600 }}>{name}</div>
+      </div>
+      {isActive && (
+        <div style={{
+          position: "absolute", top: 4, right: 4,
+          width: 6, height: 6, background: accent, borderRadius: "50%",
+        }} />
+      )}
+      {onDelete && (
+        <div
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          title="Delete saved filter"
+          style={{
+            position: "absolute", top: 4, left: 4,
+            width: 16, height: 16, borderRadius: 1,
+            background: "rgba(0,0,0,0.55)", color: "#fff",
+            fontFamily: mono, fontSize: 11, lineHeight: "16px",
+            textAlign: "center", cursor: "pointer",
+          }}
+        >×</div>
+      )}
+    </div>
+  );
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────
-function ToolbarBtn({ children, primary = false, accent = "#e89b4a", active = false, onClick, onMouseDown, onMouseUp, onMouseLeave }) {
+function ToolbarBtn({ children, primary = false, accent = "#e89b4a", active = false, disabled = false, onClick, onMouseDown, onMouseUp, onMouseLeave }) {
   return (
     <button
-      onClick={onClick}
-      onMouseDown={onMouseDown}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseLeave}
+      onClick={disabled ? undefined : onClick}
+      onMouseDown={disabled ? undefined : onMouseDown}
+      onMouseUp={disabled ? undefined : onMouseUp}
+      onMouseLeave={disabled ? undefined : onMouseLeave}
+      disabled={disabled}
       style={{
         background: primary ? accent : active ? "rgba(255,255,255,0.08)" : "transparent",
         color: primary ? "#1a1208" : "inherit",
@@ -732,7 +1083,9 @@ function ToolbarBtn({ children, primary = false, accent = "#e89b4a", active = fa
         borderRadius: 2,
         padding: "5px 10px",
         fontSize: 10, fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        letterSpacing: "0.08em", cursor: "pointer",
+        letterSpacing: "0.08em",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.35 : 1,
         fontWeight: primary ? 600 : 500,
       }}
     >{children}</button>
@@ -767,7 +1120,7 @@ function PhotofilmRoot({ tweaks }) {
 }
 
 function GlobalInputs() {
-  const { loadFromFile, setActivePreset, activePreset, toggleSelected, selected } = usePhotofilm();
+  const { loadFromFile, selectFilter, activePreset, toggleSelected, savedFilters } = usePhotofilm();
 
   // Drag-drop + paste at window level (matches viewer.html UX). The
   // DragOverlay just paints the UI; the actual file handler lives here.
@@ -801,18 +1154,21 @@ function GlobalInputs() {
     };
   }, [loadFromFile]);
 
-  // Keyboard: ←/→ to step through presets, Space to add the active preset to
-  // the export selection. Ignore when typing in an input.
+  // Keyboard: ←/→ steps through the strip (ORIGINAL + built-ins + saved
+  // customs; CUSTOM is contextual and skipped). Space adds the active filter
+  // to the export selection. Ignore when typing in an input.
   React.useEffect(() => {
+    const cycleIds = [ORIGINAL_ID, ...PRESET_IDS, ...savedFilters.map((s) => s.id)];
     const onKey = (e) => {
       const tag = e.target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) return;
-      const idx = PRESET_IDS.indexOf(activePreset);
-      if (e.key === "ArrowRight" && idx >= 0) {
-        setActivePreset(PRESET_IDS[(idx + 1) % PRESET_IDS.length]);
+      let idx = cycleIds.indexOf(activePreset);
+      if (idx < 0) idx = 0;  // CUSTOM or unknown -> arrow jumps to ORIGINAL first
+      if (e.key === "ArrowRight") {
+        selectFilter(cycleIds[(idx + 1) % cycleIds.length]);
         e.preventDefault();
-      } else if (e.key === "ArrowLeft" && idx >= 0) {
-        setActivePreset(PRESET_IDS[(idx - 1 + PRESET_IDS.length) % PRESET_IDS.length]);
+      } else if (e.key === "ArrowLeft") {
+        selectFilter(cycleIds[(idx - 1 + cycleIds.length) % cycleIds.length]);
         e.preventDefault();
       } else if (e.key === " " && activePreset) {
         toggleSelected(activePreset);
@@ -821,7 +1177,7 @@ function GlobalInputs() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activePreset, setActivePreset, toggleSelected]);
+  }, [activePreset, selectFilter, toggleSelected, savedFilters]);
 
   return null;
 }

@@ -1017,7 +1017,7 @@ const EXPORT_FORMATS = {
 
 function TabExport({ ctx }) {
   const ph = usePhotofilm();
-  const { sourceCanvas, sourceName, activePreset, intensity, selected, toggleSelected, userAdjust } = ph;
+  const { sourceCanvas, sourceName, activePreset, baseFilterId, intensity, selected, toggleSelected, userAdjust, savedFilters } = ph;
   const [format, setFormat]     = React.useState("JPEG");
   const [quality, setQuality]   = React.useState(92);
   const [longEdge, setLongEdge] = React.useState(0);   // 0 = full
@@ -1068,9 +1068,31 @@ function TabExport({ ctx }) {
 
       for (let i = 0; i < exportIds.length; i++) {
         const id = exportIds[i];
-        setProgress({ i: i + 1, total: exportIds.length, name: PRESETS[id]?.name || id });
+        const savedMatch = savedFilters.find((s) => s.id === id);
+        const filter = PRESETS[id] || savedMatch;
+        // Pick the base filter id (whose ops chain runs via applyPreset) and
+        // the userAdjust slice applied on top:
+        //   - CUSTOM:  base = current baseFilterId, adjust = live userAdjust
+        //   - saved:   base = saved.baseFilterId,   adjust = saved.userAdjust
+        //   - builtin: base = id,                   adjust = preset.userAdjust
+        //   - ORIGINAL/unknown: base = id (no ops), adjust = none
+        const baseId =
+          id === CUSTOM_ID ? baseFilterId :
+          savedMatch       ? (savedMatch.baseFilterId || ORIGINAL_ID) :
+          id;
+        const adjust =
+          id === CUSTOM_ID ? userAdjust :
+          (filter && filter.userAdjust) || null;
+        const labelName =
+          id === ORIGINAL_ID ? "ORIGINAL" :
+          id === CUSTOM_ID   ? "CUSTOM" :
+          filter?.name || id;
+        setProgress({ i: i + 1, total: exportIds.length, name: labelName });
         await new Promise((r) => setTimeout(r, 0));  // yield so progress paints
-        const filtered = applyPreset(srcData, id, exportSrc.width, exportSrc.height);
+        let filtered = applyPreset(srcData, baseId, exportSrc.width, exportSrc.height);
+        if (adjust) {
+          filtered = applyUserAdjustments(filtered, exportSrc.width, exportSrc.height, adjust);
+        }
         const out = document.createElement("canvas");
         out.width = exportSrc.width; out.height = exportSrc.height;
         const octx = out.getContext("2d");
@@ -1092,7 +1114,7 @@ function TabExport({ ctx }) {
       setBusy(false);
       setProgress(null);
     }
-  }, [sourceCanvas, exportIds, busy, format, quality, longEdge, intensity, baseName]);
+  }, [sourceCanvas, exportIds, busy, format, quality, longEdge, intensity, baseName, savedFilters, userAdjust, baseFilterId]);
 
   return (
     <div style={{ overflow: "hidden" }}>
@@ -1126,7 +1148,13 @@ function TabExport({ ctx }) {
       <div style={{ fontFamily: ctx.mono, fontSize: 10, color: ctx.muted, marginBottom: 10, letterSpacing: "0.04em" }}>
         {selected.size > 0
           ? `${selected.size} SELECTED · ADD MORE FROM THE FILM STRIP (SPACE OR CLICK BELOW)`
-          : `EXPORTING ACTIVE PRESET ONLY · ${PRESETS[activePreset]?.name || ""}`}
+          : `EXPORTING ACTIVE FILTER ONLY · ${
+              activePreset === ORIGINAL_ID ? "ORIGINAL" :
+              activePreset === CUSTOM_ID   ? "CUSTOM" :
+              PRESETS[activePreset]?.name ||
+              savedFilters.find((s) => s.id === activePreset)?.name ||
+              ""
+            }`}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
         {PRESETS_LIST.map((p) => {
