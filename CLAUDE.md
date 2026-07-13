@@ -151,8 +151,6 @@ OR CLICK OPEN" placeholder until the user drops / pastes / picks a file.
 
 ## Files no longer used by index.html
 
-- `design-canvas.jsx` — DesignCanvas wrapper used during the design-review
-  phase. Not loaded by `index.html` anymore. Safe to delete once you're sure
-  the design is locked in.
-- `viewer.html` — the previous self-contained editor. Same eight presets +
-  crop/rotate/perspective + export. Kept as a fallback / reference.
+- `viewer.html` — the previous self-contained editor. Old eight-preset Fuji
+  pack + crop/rotate/perspective + export. Kept as a fallback / reference.
+  (`design-canvas.jsx`, the design-review wrapper, was deleted 2026-07-13.)

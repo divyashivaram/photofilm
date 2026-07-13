@@ -1297,35 +1297,6 @@ function bakeTransform(src, t) {
   return out;
 }
 
-// amount in [-0.5, 0.5]. Positive = top wider than bottom (correct converging
-// verticals when shooting up at a building).
-function bakePerspective(src, amount) {
-  if (Math.abs(amount) < 0.01) return src;
-  const sw = src.width, sh = src.height;
-  const c = document.createElement("canvas");
-  c.width = sw; c.height = sh;
-  const ctx = c.getContext("2d");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  const maxScale = 1 + Math.abs(amount);
-  const baseScale = 1 / maxScale;
-  // Strip count scales with source height — keeps banding artifacts subtle on
-  // tall photos without blowing compute on small ones.
-  const strips = Math.max(150, Math.min(400, Math.round(sh / 4)));
-  for (let i = 0; i < strips; i++) {
-    const t = i / (strips - 1);
-    const sy = i * sh / strips;
-    const shStrip = sh / strips + 1;
-    const stripScale = baseScale * (1 + amount * (2 * t - 1));
-    const dw = sw * stripScale;
-    const dx = (sw - dw) / 2;
-    const dy = i * sh / strips;
-    const dh = sh / strips + 1;
-    ctx.drawImage(src, 0, sy, sw, shStrip, dx, dy, dw, dh);
-  }
-  return c;
-}
-
 // ============================================================================
 // PRESENTATIONAL COMPONENTS
 // ============================================================================
@@ -1578,7 +1549,7 @@ Object.assign(window, {
   isLoadableImage, loadImageFromBlob, loadOrientedCanvas,
   extractEmbeddedJpeg, downscaleToImageData,
   // edits
-  inscribedRect, bakeCrop, bakeRotate, bakeQuarterTurn, bakeFlip, bakePerspective, bakeTransform,
+  inscribedRect, bakeCrop, bakeRotate, bakeQuarterTurn, bakeFlip, bakeTransform,
   // components
   PhotofilmLogo, Histogram, Slider, FilteredPhoto,
 });
