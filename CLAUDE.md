@@ -60,7 +60,10 @@ any slider re-renders without invalidating the (expensive) preset cache.
   (Amount / Radius / Detail / Masking, with edge-aware masking gate). Drives
   `opGrain`, `opVignette`, `opSharpen`.
 - **Film strip** — clicking a thumbnail sets the active preset; the hero
-  re-renders with that preset applied. Eight built-in presets match the CLI.
+  re-renders with that preset applied. Seventeen built-in presets (vintage-
+  cinematic + clean-cinematic pack + three legacy classics — see
+  `filter-guide.md` and `TODOS.md`). The CLI still carries the old eight
+  Fuji sims; parity is TODOS.md Phase 5.
 - **Strength slider** — 0–100 % intensity blend between original and filtered.
 - **Histogram overlay** — derived from the hero ImageData, RGB.
 - **EXIF chip** — real source dimensions + active preset + intensity.

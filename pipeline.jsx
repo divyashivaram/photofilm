@@ -2,9 +2,11 @@
 // PHOTOFILM — shared utilities, real image pipeline, and presentational
 // components used by the V1 Darkroom UI.
 //
-// The pipeline (PRESETS + ops + applyPreset) is a JS mirror of the Python CLI
-// in photofilm/presets.py + photofilm/filters.py. Eight built-in looks render
-// identically here and in `photofilm` on the command line.
+// The pipeline (PRESETS + ops + applyPreset) started as a JS mirror of the
+// Python CLI in photofilm/presets.py + photofilm/filters.py. The preset pack
+// has since diverged: the CLI still carries the old eight Fuji sims, the
+// browser now ships the vintage/clean-cinematic pack (parity is TODOS.md
+// Phase 5).
 // ============================================================================
 
 // ---------- File-format gates ----------------------------------------------
@@ -18,8 +20,7 @@ const THUMB_MAX = 280;
 const HERO_MAX  = 1200;
 
 // ============================================================================
-// PRESETS — ops chains ported from viewer.html (which in turn mirror
-// photofilm/presets.py).
+// PRESETS — built-in filter pack.
 // ============================================================================
 const FILM_CURVE = [[0.0, 0.04], [0.25, 0.22], [0.5, 0.5], [0.75, 0.78], [1.0, 0.96]];
 
@@ -37,44 +38,204 @@ const CUSTOM_ID   = "custom";
 // to applyUserAdjustments' Lightroom-ish order; visual drift is subtle.
 //
 // `id` keys the cache + URL. `name` / `sub` / `blurb` drive UI text.
+// The pack is two waves — VINTAGE CINEMATIC (dusty film, pastel, haze, 70s/
+// 90s retro, polaroid, grunge) tuned against Pinterest reference recipes
+// (see TODOS.md), and CLEAN CINEMATIC (teal-orange, clean film portrait,
+// bright & airy). Three legacy Fuji sims survive at the end of the strip.
+// HSL `h` shifts are deliberately unused pending the opHSL scaling fix
+// (TODOS.md "Bugs").
 const PRESETS_LIST = [
+  // -------------------- vintage cinematic --------------------
   {
-    id: "provia", name: "PROVIA", sub: "STANDARD",
-    blurb: "Balanced daily driver. Restrained, realistic, neutral.",
+    id: "dusty", name: "DUSTY", sub: "WARM MATTE",
+    blurb: "Dusty brown warmth, creamy highlights, matte fade.",
     userAdjust: {
-      color:  { saturation: 10 },
-      light:  { contrast: 8 },
-      curves: { rgb: FILM_CURVE },
+      color:  { temp: 22, tint: 4, saturation: -22, vibrance: -5,
+                highlightHue: 45, highlightSat: 18, shadowHue: 30, shadowSat: 10 },
+      light:  { contrast: -6, highlights: -18, shadows: 8, whites: -8 },
+      curves: { rgb: [[0.0, 0.07], [0.25, 0.26], [0.75, 0.77], [1.0, 0.93]] },
+      effects: { grainAmount: 28, vignetteAmount: -12 },
     },
-    ops: [
-      ["grain", { amount: 0.25 }],
-    ],
+    ops: [],
   },
   {
-    id: "velvia", name: "VELVIA", sub: "VIVID",
-    blurb: "Punchy landscape stock with rich greens and blues.",
+    id: "wes", name: "WES", sub: "PASTEL STORYBOOK",
+    blurb: "Low-ink pastel warmth. Symmetry-grade reds and yellows.",
     userAdjust: {
-      color:  { saturation: 35 },
-      light:  { contrast: 25 },
-      curves: { rgb: FILM_CURVE },
+      color:  { temp: 10, tint: 6, saturation: 8, vibrance: 14 },
+      light:  { exposure: 4, contrast: -10, highlights: -20, whites: 6 },
+      hsl:    { red: { s: 18 }, orange: { s: 8, l: 6 }, yellow: { s: 12, l: 8 },
+                green: { s: -10 }, blue: { s: -15, l: 5 } },
+      curves: { rgb: [[0.0, 0.04], [0.3, 0.32], [0.7, 0.72], [1.0, 0.94]] },
+      effects: { grainAmount: 12 },
     },
-    ops: [
-      ["channel_saturation", { reds: 0.25, greens: 0.30, blues: 0.15 }],
-      ["grain", { amount: 0.2 }],
-    ],
+    ops: [],
   },
   {
-    id: "astia", name: "ASTIA", sub: "SOFT",
-    blurb: "Portrait stock — soft skin, creamy highlights.",
+    id: "misty", name: "MISTY", sub: "1999 HAZE",
+    blurb: "Soft green haze, lifted matte blacks, faded like a memory.",
     userAdjust: {
-      color:  { saturation: 5, temp: 20, tint: 5 },
-      curves: { rgb: [[0.0, 0.06], [0.3, 0.30], [0.7, 0.74], [1.0, 0.95]] },
+      color:  { temp: -6, tint: -12, saturation: -24, vibrance: -8,
+                shadowHue: 130, shadowSat: 14, highlightHue: 90, highlightSat: 6 },
+      light:  { contrast: -14, shadows: 18, blacks: 10, dehaze: -12 },
+      curves: { rgb: [[0.0, 0.12], [0.3, 0.30], [0.7, 0.70], [1.0, 0.90]] },
+      effects: { grainAmount: 26 },
     },
-    ops: [
-      ["channel_saturation", { reds: 0.15, greens: -0.10, blues: -0.05 }],
-      ["grain", { amount: 0.2 }],
-    ],
+    ops: [],
   },
+  {
+    id: "retro-metro", name: "RETRO METRO", sub: "70S GOLD",
+    blurb: "Golden-yellow metropolitan 70s. Dense shadows, amber sky.",
+    userAdjust: {
+      color:  { temp: 30, tint: 5, saturation: 12,
+                highlightHue: 50, highlightSat: 20, shadowHue: 40, shadowSat: 8 },
+      light:  { exposure: -2, contrast: 10, highlights: -12, shadows: -6 },
+      hsl:    { orange: { s: 12 }, yellow: { s: 10, l: 6 },
+                aqua: { s: -15 }, blue: { s: -20, l: -8 } },
+      curves: {
+        r: [[0.0, 0.02], [0.5, 0.54], [1.0, 1.0]],
+        b: [[0.0, 0.02], [0.5, 0.46], [1.0, 0.94]],
+      },
+      effects: { grainAmount: 25, vignetteAmount: -14 },
+    },
+    ops: [],
+  },
+  {
+    id: "seventies", name: "SEVENTIES", sub: "KODACHROME WASH",
+    blurb: "Sun-washed 70s warmth. Hot highlights, heavy honest grain.",
+    userAdjust: {
+      color:  { temp: 26, tint: 8, saturation: 10,
+                highlightHue: 48, highlightSat: 22, shadowHue: 35, shadowSat: 10 },
+      light:  { exposure: -4, contrast: 6, highlights: 16 },
+      hsl:    { red: { s: 10 }, yellow: { l: 8 } },
+      curves: {
+        rgb: [[0.0, 0.05], [0.5, 0.52], [1.0, 0.96]],
+        b:   [[0.0, 0.03], [0.5, 0.46], [1.0, 0.95]],
+      },
+      effects: { grainAmount: 38 },
+    },
+    ops: [],
+  },
+  {
+    id: "nineties", name: "NINETIES", sub: "FADED WARM",
+    blurb: "Warm 90s fade with cool blue highlights. Reebok-sock core.",
+    userAdjust: {
+      color:  { temp: 12, tint: 3, saturation: -14,
+                highlightHue: 220, highlightSat: 12, shadowHue: 40, shadowSat: 6, balance: 10 },
+      light:  { exposure: -4, contrast: 8 },
+      curves: { rgb: [[0.0, 0.10], [0.3, 0.30], [0.7, 0.72], [1.0, 0.95]] },
+      effects: { grainAmount: 30 },
+    },
+    ops: [],
+  },
+  {
+    id: "disposable", name: "DISPOSABLE", sub: "1990 SNAPSHOT",
+    blurb: "Drugstore-print greens and warm skin. Scanned family album.",
+    userAdjust: {
+      color:  { temp: -4, tint: 8, saturation: -12,
+                highlightHue: 60, highlightSat: 14, shadowHue: 140, shadowSat: 12 },
+      light:  { exposure: -5, contrast: -8 },
+      curves: {
+        rgb: [[0.0, 0.08], [0.3, 0.29], [0.7, 0.71], [1.0, 0.94]],
+        g:   [[0.0, 0.02], [0.5, 0.53], [1.0, 0.98]],
+      },
+      effects: { grainAmount: 28, vignetteAmount: -12 },
+    },
+    ops: [],
+  },
+  {
+    id: "polaroid", name: "POLAROID", sub: "INSTANT FADE",
+    blurb: "Instant-film fade — soft tones, yellow whites, green shadows.",
+    userAdjust: {
+      color:  { temp: 6, tint: -4, saturation: -8,
+                highlightHue: 55, highlightSat: 16, shadowHue: 130, shadowSat: 6 },
+      light:  { exposure: -6, contrast: -12, shadows: 10, highlights: 14, clarity: 4 },
+      curves: { rgb: [[0.0, 0.10], [0.25, 0.28], [0.75, 0.80], [1.0, 0.92]] },
+      effects: { grainAmount: 40, vignetteAmount: -20, vignetteFeather: 70, sharpenAmount: 12 },
+    },
+    ops: [],
+  },
+  {
+    id: "grunge", name: "GRUNGE", sub: "DARK FADE",
+    blurb: "Underexposed, cold and contrasty. Record-store darkness.",
+    userAdjust: {
+      color:  { temp: -12, saturation: -22 },
+      light:  { exposure: -10, contrast: 18 },
+      curves: { rgb: [[0.0, 0.09], [0.5, 0.47], [1.0, 0.93]] },
+      effects: { grainAmount: 40, vignetteAmount: -18 },
+    },
+    ops: [],
+  },
+  {
+    id: "cinema-gold", name: "CINEMA GOLD", sub: "WARM CINEMATIC",
+    blurb: "Rich golden interiors, deep velvet shadows. Lamp-lit drama.",
+    userAdjust: {
+      color:  { temp: 20, tint: 6, saturation: -6, vibrance: 10,
+                shadowHue: 25, shadowSat: 12, highlightHue: 45, highlightSat: 12 },
+      light:  { contrast: 14, highlights: -10, shadows: -12, blacks: -6 },
+      hsl:    { orange: { s: 6, l: 6 }, green: { s: -12 }, blue: { s: -18 } },
+      curves: {
+        rgb: [[0.0, 0.03], [0.25, 0.20], [0.75, 0.80], [1.0, 0.97]],
+        b:   [[0.0, 0.04], [0.5, 0.46], [1.0, 0.92]],
+      },
+      effects: { grainAmount: 16, vignetteAmount: -16 },
+    },
+    ops: [],
+  },
+  {
+    id: "green-room", name: "GREEN ROOM", sub: "MUTED GREEN FILM",
+    blurb: "Muted mossy greens and dim tungsten. Kitchen-table cinema.",
+    userAdjust: {
+      color:  { temp: -8, tint: -18, saturation: -18,
+                shadowHue: 150, shadowSat: 16, highlightHue: 90, highlightSat: 8 },
+      light:  { contrast: 6, highlights: -14, shadows: 6 },
+      hsl:    { green: { s: -10, l: -4 }, yellow: { s: -8 } },
+      curves: {
+        rgb: [[0.0, 0.07], [0.5, 0.50], [1.0, 0.93]],
+        g:   [[0.0, 0.02], [0.5, 0.52], [1.0, 0.98]],
+      },
+      effects: { grainAmount: 30 },
+    },
+    ops: [],
+  },
+  // -------------------- clean cinematic --------------------
+  {
+    id: "blockbuster", name: "BLOCKBUSTER", sub: "TEAL & ORANGE",
+    blurb: "Clean modern grade — teal shadows, warm skin, zero grain.",
+    userAdjust: {
+      color:  { temp: 6, saturation: 4, vibrance: 18,
+                shadowHue: 195, shadowSat: 18, highlightHue: 40, highlightSat: 10, balance: -10 },
+      light:  { contrast: 12, shadows: -6 },
+      hsl:    { orange: { s: 10, l: 4 }, aqua: { s: 14 }, blue: { s: 10, l: -4 },
+                green: { s: -8 } },
+      curves: { rgb: [[0.0, 0.02], [0.25, 0.22], [0.75, 0.79], [1.0, 0.99]] },
+    },
+    ops: [],
+  },
+  {
+    id: "portra", name: "PORTRA", sub: "CLEAN FILM PORTRAIT",
+    blurb: "Soft warm film with honest skin. The wedding-photographer look.",
+    userAdjust: {
+      color:  { temp: 12, tint: 4, saturation: -6, vibrance: 12,
+                highlightHue: 45, highlightSat: 8 },
+      light:  { contrast: -4, highlights: -12, shadows: 6 },
+      hsl:    { red: { s: -6 }, orange: { l: 8, s: -4 }, green: { s: -10, l: -4 } },
+      curves: { rgb: [[0.0, 0.03], [0.25, 0.24], [0.75, 0.78], [1.0, 0.97]] },
+      effects: { grainAmount: 10 },
+    },
+    ops: [],
+  },
+  {
+    id: "cream", name: "CREAM", sub: "BRIGHT & AIRY",
+    blurb: "Overexposed cream and soft whites. Clean, weightless, minimal.",
+    userAdjust: {
+      color:  { temp: 6, tint: 2, saturation: -10, vibrance: 8 },
+      light:  { exposure: 8, contrast: -8, highlights: -8, shadows: 12, whites: 10 },
+      curves: { rgb: [[0.0, 0.05], [0.5, 0.55], [1.0, 0.98]] },
+    },
+    ops: [],
+  },
+  // -------------------- legacy classics --------------------
   {
     id: "classic-chrome", name: "CLASSIC CHROME", sub: "DOCUMENTARY",
     blurb: "Muted travel-doc tones. Lifted blacks, cyan shadows.",
@@ -86,47 +247,6 @@ const PRESETS_LIST = [
     ops: [
       ["channel_saturation", { reds: -0.15, greens: 0.05, blues: 0.10 }],
       ["grain", { amount: 0.4 }],
-    ],
-  },
-  {
-    id: "eterna", name: "ETERNA", sub: "CINEMA",
-    blurb: "Cinematic flat profile. Soft, expensive, understated.",
-    userAdjust: {
-      color:  { saturation: -30, temp: 5, tint: -5 },
-      light:  { contrast: -10 },
-      curves: { rgb: [[0.0, 0.08], [0.5, 0.48], [1.0, 0.88]] },
-    },
-    ops: [
-      ["grain", { amount: 0.3 }],
-    ],
-  },
-  {
-    id: "acros", name: "ACROS", sub: "MONOCHROME",
-    blurb: "Silver-halide monochrome with deep, painterly grain.",
-    userAdjust: {
-      light:  { contrast: 15 },
-      curves: { rgb: [[0.0, 0.02], [0.3, 0.22], [0.7, 0.80], [1.0, 0.98]] },
-    },
-    ops: [
-      ["monochrome", { red: 0.4, green: 0.4, blue: 0.2 }],
-      ["grain", { amount: 0.6 }],
-    ],
-  },
-  {
-    id: "synthwave", name: "SYNTHWAVE", sub: "NEON DUSK",
-    blurb: "Neon dreams. Magenta bloom and retro-future glow.",
-    userAdjust: {
-      color:  { saturation: 40 },
-      light:  { contrast: 20 },
-      curves: {
-        r: [[0.0, 0.08], [0.3, 0.32], [0.7, 0.78], [1.0, 1.0]],
-        g: [[0.0, 0.0 ], [0.3, 0.16], [0.7, 0.48], [1.0, 0.82]],
-        b: [[0.0, 0.28], [0.3, 0.50], [0.7, 0.78], [1.0, 0.95]],
-      },
-    },
-    ops: [
-      ["bloom", { threshold: 0.55, blur_radius: 30.0, amount: 0.55 }],
-      ["grain", { amount: 0.25 }],
     ],
   },
   {
@@ -149,26 +269,15 @@ const PRESETS_LIST = [
     ],
   },
   {
-    // Imported from 20160910-DSC06091.xmp. Best-effort: matte tone curves,
-    // mild WB warmth, global desat, RGB-channel sat shift, grain. Lightroom
-    // exposure/highlights/shadows/whites/blacks/clarity, vibrance, HSL hue+
-    // lum shifts, and sharpen don't have preset-op equivalents yet — see
-    // CLAUDE.md TODO #3 Phase 2.
-    id: "vintage-mute", name: "VINTAGE MUTE", sub: "FADED",
-    blurb: "Matte-lifted shadows, muted palette, warm tint. Imported from XMP.",
+    id: "acros", name: "ACROS", sub: "MONOCHROME",
+    blurb: "Silver-halide monochrome with deep, painterly grain.",
     userAdjust: {
-      color:  { saturation: -28, temp: 3, tint: 5 },
-      light:  { contrast: 6 },
-      curves: {
-        rgb: [[0, 0.1529], [0.1451, 0.1804], [0.3216, 0.3059], [0.7137, 0.7294], [1.0, 0.9647]],
-        r:   [[0, 0], [0.2000, 0.1176], [0.5020, 0.5059], [0.6784, 0.7451], [1.0, 1.0]],
-        g:   [[0, 0], [0.2000, 0.1176], [0.5020, 0.5020], [0.7098, 0.7843], [1.0, 1.0]],
-        b:   [[0, 0], [0.1804, 0.0824], [0.4824, 0.4706], [0.7216, 0.7843], [1.0, 1.0]],
-      },
+      light:  { contrast: 15 },
+      curves: { rgb: [[0.0, 0.02], [0.3, 0.22], [0.7, 0.80], [1.0, 0.98]] },
     },
     ops: [
-      ["channel_saturation", { reds: 0.02, greens: -0.20, blues: -0.40 }],
-      ["grain",              { amount: 0.50 }],
+      ["monochrome", { red: 0.4, green: 0.4, blue: 0.2 }],
+      ["grain", { amount: 0.6 }],
     ],
   },
 ];
@@ -457,9 +566,12 @@ function opHSL(buf, n, adj) {
   if (!isHSLAdjustActive(adj)) return;
   const HALF = 60 / 360;
   // Pre-flatten band data into parallel arrays for the inner loop.
+  // Slider state is [-100, +100]; coalesce missing keys (presets pass
+  // partial bands like { s: 18 }) and normalize to [-1, +1] here so the
+  // mapping constants below hold.
   const bands = HSL_HUE_KEYS.map((k) => {
     const a = adj[k] || { h: 0, s: 0, l: 0 };
-    return { c: HSL_HUE_CENTERS[k], dh: a.h, ds: a.s, dl: a.l };
+    return { c: HSL_HUE_CENTERS[k], dh: (a.h || 0) / 100, ds: (a.s || 0) / 100, dl: (a.l || 0) / 100 };
   });
   for (let i = 0; i < n; i++) {
     const idx = i * 3;
